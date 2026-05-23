@@ -3,7 +3,10 @@ from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.views.generic import TemplateView
 from django.shortcuts import render
-from game.forms import CustomSetPasswordForm
+from game.forms import (
+    CustomPasswordResetForm,
+    CustomSetPasswordForm
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,7 +18,8 @@ urlpatterns = [
          auth_views.PasswordResetView.as_view(
              template_name='game/password_reset.html',
              email_template_name='game/password_reset_email.html',
-             subject_template_name='game/password_reset_subject.txt'
+             subject_template_name='game/password_reset_subject.txt',
+             form_class=CustomPasswordResetForm,
          ),
          name='password_reset'),
 
@@ -45,4 +49,10 @@ def custom_page_not_found(request, exception):
     return render(request, '404.html', status=404)
 
 
+def custom_server_error(request):
+    """Render the themed 500 page for unexpected server errors."""
+    return render(request, '500.html', status=500)
+
+
 handler404 = 'core.urls.custom_page_not_found'
+handler500 = 'core.urls.custom_server_error'

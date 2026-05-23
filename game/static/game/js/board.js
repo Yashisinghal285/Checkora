@@ -23,6 +23,7 @@
             let selected = null;
             let hints = [];
             let lastMove = null;
+            let premove = null;
 
             let dragging = false;
             let dragSrc = null;
@@ -34,6 +35,9 @@
             let pendingPromo = null;
             let blindfoldMode = false;
             let illegalMoveCount = 0;
+
+            let whiteAlertFired = false;
+            let blackAlertFired = false;
 
             let gameStartTime = null;
     
@@ -124,6 +128,8 @@
             /* ==========================================================
             DOM REFERENCES
             ========================================================== */
+            const shareModal = document.getElementById('shareModal');
+            const rulebookModal = document.getElementById('rulebookModal');
             const boardEl = document.getElementById('board');
             const turnEl = document.getElementById('turnBadge');
             const statusEl = document.getElementById('statusBar');
@@ -414,6 +420,10 @@
                 // Reset AI request sequence and thinking state on load/reconnect to cancel stale requests
                 aiRequestSeq = 0;
                 aiThinking = false;
+                premove = null;
+                refreshPremoveHighlight();
+                whiteAlertFired = false;
+                blackAlertFired = false;
 
                 const data = await get('/api/state/');
 
@@ -562,8 +572,19 @@
                                 }
                                 return e.preventDefault();
                             }
-                            if (pColor(piece) !== turn || paused || gameOver) return e.preventDefault();
-                            if (gameMode === 'ai' && turn !== playerColor) return e.preventDefault();
+                            if (paused || gameOver) return e.preventDefault();
+                            
+                            const isPremovedDrag = gameMode === 'ai' && turn !== playerColor && pColor(piece) === playerColor;
+                            
+                            // If it's the AI's turn, only allow dragging if it's a valid premove
+                            if (gameMode === 'ai' && turn !== playerColor && !isPremovedDrag) {
+                                return e.preventDefault();
+                            }
+                            
+                            // For all other normal moves, you can only drag your own pieces on your turn
+                            if (!isPremovedDrag && pColor(piece) !== turn) {
+                                return e.preventDefault();
+                            }
                             
                             if (e.dataTransfer) {
                                 e.dataTransfer.setData('text/plain', 'piece-move');
@@ -637,8 +658,10 @@
                     const r = parseInt(el.dataset.r);
                     const c = parseInt(el.dataset.c);
                     const p = board[r][c];
-                    const isPlayable = p && pColor(p) === turn
-                        && !(gameMode === 'ai' && turn !== playerColor);
+                    const isPlayable = p && (
+                        pColor(p) === turn ||
+                        (gameMode === 'ai' && pColor(p) === playerColor)
+                    );
                     img.classList.toggle('playable', isPlayable);
                 });
             }
@@ -663,6 +686,18 @@
                         el.appendChild(d);
                     });
                 }
+                refreshPremoveHighlight();
+            }
+
+            function refreshPremoveHighlight() {
+                boardEl.querySelectorAll('.square').forEach(el => {
+                    el.classList.remove('premove');
+                });
+
+                if (!premove) return;
+
+                sq(premove.from.r, premove.from.c).classList.add('premove');
+                sq(premove.to.r, premove.to.c).classList.add('premove');
             }
 
             function highlightCheck() {
@@ -728,16 +763,28 @@
             ========================================================== */
             async function selectPiece(r, c) {
                 const p = board[r][c];
-                if (!p || pColor(p) !== turn || paused || gameOver) return;
 
-                if (gameMode === 'ai' && turn !== playerColor) {
-                    showStatus("Waiting for AI to move...", false);
+                if (!p || paused || gameOver) return;
+
+                selected = { r, c };
+
+                // PREMOVE MODE DURING AI TURN
+                if (
+                    gameMode === 'ai' &&
+                    turn !== playerColor &&
+                    pColor(p) === playerColor
+                ) {
+                    hints = [];
+
+                    refreshHighlights();
                     return;
                 }
 
-                selected = { r, c };
+                // NORMAL MOVE LOGIC
                 const data = await get(`/api/valid-moves/?row=${r}&col=${c}`);
+
                 hints = data.valid_moves || [];
+
                 refreshHighlights();
             }
 
@@ -788,8 +835,36 @@
 
             async function tryMove(fr, fc, tr, tc) {
                 if (paused || gameOver) return;
+
                 const p = board[fr][fc];
-                if (!p || pColor(p) !== turn) return;
+                if (!p) return;
+
+                // PREMOVE DURING AI TURN
+                if (
+                    gameMode === 'ai' &&
+                    pColor(p) === playerColor &&
+                    turn !== playerColor
+                ) {
+                    premove = {
+                        from: { r: fr, c: fc },
+                        to: { r: tr, c: tc }
+                    };
+
+                    refreshPremoveHighlight();
+                    showStatus("Premove queued", false);
+
+                    selected = null;
+                    hints = [];
+                    refreshHighlights();
+
+                    return;
+                }
+
+                // NORMAL MOVE VALIDATION
+                if (pColor(p) !== turn) {
+                    deselect();
+                    return;
+                }
 
                 if (fr === tr && fc === tc) {
                     deselect();
@@ -798,11 +873,15 @@
 
                 if (isPromotionMove(fr, fc, tr)) {
                     await animateMove(fr, fc, tr, tc);
+
                     pendingPromo = { fr, fc, tr, tc };
+
                     const color = pColor(p);
                     showPromoModal(color);
+
                     return;
                 }
+
                 await executeMove(fr, fc, tr, tc, null);
             }            let reconnecting = false;
             async function handleReconnect() {
@@ -984,6 +1063,22 @@
                                 showStatus('Your turn.', false);
                             }
                             if (a11yMsg) announceMove(a11yMsg);
+
+                            // Trigger queued premove if it exists
+                            if (premove) {
+                                const queued = premove;
+                                premove = null;
+                                refreshPremoveHighlight();
+
+                                const piece = board[queued.from.r][queued.from.c];
+                                if (piece && pColor(piece) === turn) {
+                                    setTimeout(() => {
+                                        tryMove(queued.from.r, queued.from.c, queued.to.r, queued.to.c);
+                                    }, 150);
+                                } else {
+                                    showStatus("Premove cancelled: piece captured or invalid", true);
+                                }
+                            }
                         }
                     } else {
                         showStatus(data.message, true);
@@ -1003,32 +1098,91 @@
             ========================================================== */
             async function onClick(r, c) {
                 if (dragging) return;
+
+                const piece = board[r][c];
+
+                const aiPremoveMode =
+                    gameMode === 'ai' &&
+                    turn !== playerColor;
+
                 if (selected) {
 
-                    //New toggle logic:
-                    //If the clicked square is the exact same as the selected square, deselect it.
-                    if (selected .r === r && selected.c ===c){
+                    // deselect same square
+                    if (selected.r === r && selected.c === c) {
                         return deselect();
                     }
-                    if (hints.some(h => h.row === r && h.col === c))
+
+                    // PREMOVE CLICK
+                    if (aiPremoveMode) {
+
+                        premove = {
+                            from: { r: selected.r, c: selected.c },
+                            to: { r, c }
+                        };
+
+                        refreshPremoveHighlight();
+
+                        showStatus("Premove queued", false);
+
+                        selected = null;
+                        hints = [];
+                        refreshHighlights();
+
+                        return;
+                    }
+
+                    // NORMAL MOVE
+                    if (hints.some(h => h.row === r && h.col === c)) {
                         return tryMove(selected.r, selected.c, r, c);
-                    if (board[r][c] && pColor(board[r][c]) === turn)
+                    }
+
+                    // reselect another piece
+                    if (piece && pColor(piece) === turn) {
                         return selectPiece(r, c);
+                    }
+
                     return deselect();
                 }
-                selectPiece(r, c);
+
+                // selecting initial piece
+                if (
+                    piece &&
+                    (
+                        pColor(piece) === turn ||
+                        (
+                            aiPremoveMode &&
+                            pColor(piece) === playerColor
+                        )
+                    )
+                ) {
+                    return selectPiece(r, c);
+                }
             }
 
             function onDragStart(e, r, c) {
-                if (!board[r][c]) {
+
+                const piece = board[r][c];
+                if (!piece) {
                     if (blindfoldMode) {
                         showStatus('No piece there', true);
                         flashBoard();
                     }
                     return e.preventDefault();
                 }
-                if (paused || pColor(board[r][c]) !== turn) return e.preventDefault();
-                if (gameMode === 'ai' && turn !== playerColor) return e.preventDefault();
+                if (paused || gameOver) return e.preventDefault();
+                
+                const isPremovedDrag = gameMode === 'ai' && turn !== playerColor && pColor(piece) === playerColor;
+                
+                // If it's the AI's turn, only allow dragging if it's a valid premove
+                if (gameMode === 'ai' && turn !== playerColor && !isPremovedDrag) {
+                    return e.preventDefault();
+                }
+                
+                // For all normal moves, you can only drag your own pieces on your turn
+                if (!isPremovedDrag && pColor(piece) !== turn) {
+                    return e.preventDefault();
+                }
+
                 dragging = true;
                 dragSrc = { r, c };
                 selectPiece(r, c);
@@ -1354,12 +1508,20 @@
                     if (playerClock) {
                         playerClock.classList.toggle('active', !isAiTurn);
                         playerClock.classList.toggle('inactive', isAiTurn);
+                        const pt = playerColor === 'white' ? whiteTime : blackTime;
+                        playerClock.classList.toggle('low-1', pt <= 30 && pt > 20);
+                        playerClock.classList.toggle('low-2', pt <= 20 && pt > 10);
+                        playerClock.classList.toggle('low-3', pt <= 10 && pt > 0);
                     }
                     if (aiClock) {
                         aiClock.style.border = '';
                         aiClock.style.boxShadow = '';
                         aiClock.classList.toggle('active', isAiTurn);
                         aiClock.classList.toggle('inactive', !isAiTurn);
+                        const at = playerColor === 'white' ? blackTime : whiteTime;
+                        aiClock.classList.toggle('low-1', at <= 30 && at > 20);
+                        aiClock.classList.toggle('low-2', at <= 20 && at > 10);
+                        aiClock.classList.toggle('low-3', at <= 10 && at > 0);
                     }
                 } else {
                     // PvP — both clocks update normally
@@ -1368,10 +1530,16 @@
                     if (whiteClock) {
                         whiteClock.classList.toggle('active', turn === 'white');
                         whiteClock.classList.remove('inactive'); // fix: clear AI-mode styling bleed
+                        whiteClock.classList.toggle('low-1', whiteTime <= 30 && whiteTime > 20);
+                        whiteClock.classList.toggle('low-2', whiteTime <= 20 && whiteTime > 10);
+                        whiteClock.classList.toggle('low-3', whiteTime <= 10 && whiteTime > 0);
                     }
                     if (blackClock) {
                         blackClock.classList.toggle('active', turn === 'black');
                         blackClock.classList.remove('inactive'); // fix: clear AI-mode styling bleed
+                        blackClock.classList.toggle('low-1', blackTime <= 30 && blackTime > 20);
+                        blackClock.classList.toggle('low-2', blackTime <= 20 && blackTime > 10);
+                        blackClock.classList.toggle('low-3', blackTime <= 10 && blackTime > 0);
                     }
                 }
                 const wYou = document.getElementById('whiteYouTag');
@@ -1411,6 +1579,20 @@
                     }
 
                     renderClocks();
+
+                    // Low-time alert: play check.wav once per player when time crosses into <=30s
+                    if (soundEnabled) {
+                        if (!whiteAlertFired && whiteTime > 0 && whiteTime <= 30) {
+                            whiteAlertFired = true;
+                            sounds.check.currentTime = 0;
+                            sounds.check.play().catch(() => {});
+                        }
+                        if (!blackAlertFired && blackTime > 0 && blackTime <= 30) {
+                            blackAlertFired = true;
+                            sounds.check.currentTime = 0;
+                            sounds.check.play().catch(() => {});
+                        }
+                    }
 
                     if (turn === 'white' && whiteTime === 0) {
                         endGame('timeout', 'white');
@@ -1524,6 +1706,8 @@
                 // Reset AI request sequence and thinking state on new game
                 aiRequestSeq = 0;
                 aiThinking = false;
+                premove = null;
+                refreshPremoveHighlight();
 
                 clearTimeout(pgnDownloadTimeout);
                 clearTimeout(fenCopyTimeout);
@@ -1586,6 +1770,8 @@
                 turn = d.current_turn;
                 paused = false;
                 gameOver = false;
+                whiteAlertFired = false;
+                blackAlertFired = false;
                 
                 gameStartTime = Date.now();
                 
@@ -1855,7 +2041,7 @@
                 confirmOverlay.classList.remove('active');
                 confirmCallback = null;
             };
-                //added new line here
+
             if (newPvPBtn) newPvPBtn.onclick = () => {
                 // Clear any lingering celebration effects
                 const overlay = document.getElementById('gameOverOverlay');
@@ -2130,9 +2316,26 @@
                 const tag = document.activeElement && document.activeElement.tagName;
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-                if (document.querySelector('.modal.show, [role="dialog"]:not([hidden]), .promo-overlay.active')) return;
+                
 
                 const key = e.key.toLowerCase();
+                const hasBlockingOverlay =
+                    document.querySelector(
+                        '.modal.show, [role="dialog"]:not([hidden]), .promo-overlay.active'
+                    ) ||
+                    (shareModal?.style.display && shareModal.style.display !== 'none') ||
+                    (rulebookModal?.style.display && rulebookModal.style.display !== 'none') ||
+                    fenOverlay?.classList.contains('active') ||
+                    confirmOverlay?.classList.contains('active') ||
+                    drawOverlay?.classList.contains('active') ||
+                    gameOverOverlay?.classList.contains('active') ||
+                    welcomeOverlay?.classList.contains('active');
+
+            // Allow Escape to close overlays
+            if (hasBlockingOverlay && key !== 'escape') {
+                return;
+            }
+
                 if (key === 'f' && flipBtn) {
                     e.preventDefault();
                     flipBtn.click();
@@ -2145,7 +2348,29 @@
                 } else if (key === 'p' && pauseBtn && pauseBtn.style.display !== 'none') {
                     e.preventDefault();
                     pauseBtn.click();
-                }// added pause/resume button shortcut
+                } else if (key === 'n' && newPvPBtn) {
+                    e.preventDefault();
+                    newPvPBtn.click();
+
+                } else if (key === 'a' && newAIBtn) {
+                    e.preventDefault();
+                    newAIBtn.click();
+
+                } else if (key === 'escape') {
+                    e.preventDefault();
+
+                    if (shareModal?.style.display === 'flex') {
+                        shareModal.style.display = 'none';
+                    }
+
+                    if (rulebookModal?.style.display === 'flex') {
+                        rulebookModal.style.display = 'none';
+                    }
+
+                    if (fenOverlay?.classList.contains('active')) {
+                        fenOverlay.classList.remove('active');
+                    }
+                }
             });
             // Emote Logic
             let emoteCooldown = false;
@@ -2204,6 +2429,7 @@ if (leaveConfirmYes) leaveConfirmYes.addEventListener('click', () => {
 if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
     leaveConfirmOverlay.style.display = 'none';
 });
+
             
             function showAssetWarning() {
                 const t = document.getElementById('confirmTimerContainer');
@@ -2262,8 +2488,8 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
             const statusText = document.getElementById('status-text');
             function setOfflineStatus() {
             if (!statusIndicator || !statusText) return;
-                statusIndicator.classList.remove("offline");
-                statusText.textContent = "offline";
+                statusIndicator.classList.add("offline"); //fixed
+                statusText.textContent = "Offline";
             }
             function setOnlineStatus() {
                 if (!statusIndicator || !statusText) return;
@@ -2285,6 +2511,12 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                 loadGame();
             }
 
+            boardEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+
+                premove = null;
+                refreshPremoveHighlight();
+                showStatus("Premove cancelled", false);
+            });
+
 })();
-
-
