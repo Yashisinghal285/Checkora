@@ -11,9 +11,11 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.views import PasswordResetView
 from smtplib import SMTPException
 from django.core.mail import BadHeaderError, send_mail
 from django.contrib import messages
+from django.core.cache import cache
 from django.db.models import F, Q
 
 from .forms import CustomUserCreationForm
@@ -188,6 +190,7 @@ def new_game(request):
         'draw_reason': game.draw_reason,
     })
 
+
 @require_POST
 def resume_game(request):
     """Resume the existing session game without resetting it."""
@@ -223,6 +226,7 @@ def resume_game(request):
         'pgn': game.generate_pgn(),
         'difficulty': request.session.get('difficulty', 'medium'),
     })
+
 
 @require_GET
 def check_promotion(request):
@@ -338,8 +342,7 @@ def ai_move(request):
     depth = depth_map.get(difficulty, 3)
 
     best = game.get_ai_move(depth=depth)
-    best = game.get_ai_move(depth=depth)
-    
+
     if not best:
         if game.game_status == 'checkmate':
             winner = 'black' if game.current_turn == 'white' else 'white'
@@ -479,6 +482,7 @@ def register_view(request):
             # Hash OTP with SECRET_KEY as salt to prevent reading from signed cookies
             otp_hash = hashlib.sha256(f"{otp}:{settings.SECRET_KEY}".encode()).hexdigest()
             request.session['registration_otp_hash'] = otp_hash
+            request.session['otp_created_at'] = time.time()
 
             # Send Email
             try:
@@ -550,11 +554,29 @@ def verify_otp(request):
         return redirect('register')
 
     if request.method == 'POST':
+        otp_created_at = request.session.get('otp_created_at')
+
+        if otp_created_at:
+            if time.time() - otp_created_at > 300:
+
+                messages.error(
+                    request,
+                    'OTP has expired. Please register again.',
+                )
+                request.session.pop('registration_otp_hash', None)
+                request.session.pop('otp_created_at', None)
+                request.session.pop('registration_user_id', None)
+
+                return redirect('register')
+
         entered_otp = request.POST.get('otp', '').strip()
         # Verify hash
         entered_otp_hash = hashlib.sha256(f"{entered_otp}:{settings.SECRET_KEY}".encode()).hexdigest()
 
-        if entered_otp_hash == stored_otp_hash:
+        if secrets.compare_digest(
+            entered_otp_hash,
+            stored_otp_hash
+        ):
             try:
                 user = User.objects.get(id=user_id)
                 user.is_active = True
@@ -563,6 +585,7 @@ def verify_otp(request):
                 # Clear session data
                 del request.session['registration_user_id']
                 del request.session['registration_otp_hash']
+                request.session.pop('otp_created_at', None)
 
                 login(request, user)
                 request.session.cycle_key()
@@ -577,6 +600,38 @@ def verify_otp(request):
             messages.error(request, 'Invalid OTP. Please try again.')
 
     return render(request, 'game/verify_otp.html')
+
+
+class CustomPasswordResetView(PasswordResetView):
+    def post(self, request, *args, **kwargs):
+
+        email = request.POST.get('email', '').strip().lower()
+
+        if not email:
+
+            messages.error(
+                request,
+                'Please enter a valid email address.'
+            )
+
+            return redirect('password_reset')
+
+        cache_key = (f"password_reset_cooldown_{email}")
+
+        if cache.get(cache_key):
+
+            messages.error(
+                request,
+                'Please wait 60 seconds before requesting another password reset email.',
+            )
+
+            return redirect('password_reset')
+        cache.set(cache_key, True, timeout=60)
+        return super().post(
+            request,
+            *args,
+            **kwargs
+        )
 
 
 def login_view(request):
