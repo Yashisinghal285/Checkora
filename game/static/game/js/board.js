@@ -197,7 +197,6 @@
 
             const resignBtn = document.getElementById('resignBtn');
             const drawBtn = document.getElementById('drawBtn');
-            let wasPaused = false;
             const drawOverlay = document.getElementById('drawOverlay');
             const drawMessage = document.getElementById('drawMessage');
             const drawAcceptBtn = document.getElementById('drawAcceptBtn');
@@ -2171,11 +2170,6 @@
             };
             if (confirmNoBtn) confirmNoBtn.onclick = () => {
                 confirmOverlay.classList.remove('active');
-
-                if (wasPaused) {
-                    boardEl.classList.add('paused');
-                }
-
                 confirmCallback = null;
             };
 
@@ -2255,23 +2249,7 @@
             if (pauseBtn) pauseBtn.onclick = () => paused ? resumeGame() : pauseGame();
             if (muteBtn) muteBtn.onclick = toggleMute;
             if (flipBtn) flipBtn.onclick = toggleBoardOrientation;
-if (resignBtn) resignBtn.onclick = () => {
-    if (gameOver) return;
 
-    wasPaused = paused;
-
-    if (wasPaused) {
-        boardEl.classList.remove('paused');
-    }
-
-    showConfirm("Resign?", "Are you sure you want to resign?", async () => {
-        try {
-            const result = await post('/api/resign/', {});
-
-            if (result.valid) {
-                if (soundEnabled) {
-                    sounds.draw.currentTime = 0;
-                    sounds.draw.play().catch(() => {});
             const blindfoldBtn = document.getElementById('blindfoldBtn');
             if (blindfoldBtn) {
                 blindfoldBtn.onclick = () => {
@@ -2306,17 +2284,7 @@ if (resignBtn) resignBtn.onclick = () => {
                         }
                     });
                 }
-                endGame('resign', turn);
-            } else {
-                if (wasPaused) boardEl.classList.add('paused');
-                showStatus('Resign failed. Please try again.', true);
-            }
-        } catch (_) {
-            if (wasPaused) boardEl.classList.add('paused');
-            showStatus('Resign failed. Please check your connection and try again.', true);
-        }
-    });
-};
+            };
 
             if (drawBtn) drawBtn.onclick = offerDraw;
             if (drawAcceptBtn) drawAcceptBtn.onclick = async () => {
