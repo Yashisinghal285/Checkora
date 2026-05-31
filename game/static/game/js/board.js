@@ -22,9 +22,10 @@
             let turn = 'white';
             let selected = null;
             let hints = [];
-            let lastMove = null;
-            let premove = null;
-            let highlightedSquare = null;
+             let lastMove = null;
+             let premoveQueue = [];
+             let lastPremoveQueueStr = '';
+             let highlightedSquare = null;
 
             let dragging = false;
             let dragSrc = null;
@@ -303,7 +304,8 @@
             
             // post() uses csrf()
             function csrf() {
-                return document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const m = document.cookie.match(/csrftoken=([^;]+)/);
+                return m ? decodeURIComponent(m[1]) : '';  // ← returns empty on Vercel
             }
 
             async function get(url) {
@@ -339,6 +341,141 @@
                 const vc = flipped ? 7 - c : c;
                 return boardEl.children[vr * 8 + vc];
             };
+
+            function getVirtualBoard() {
+                let virtualBoard = board.map(row => [...row]);
+                for (const pm of premoveQueue) {
+                    const piece = virtualBoard[pm.from.r][pm.from.c];
+                    if (piece) {
+                        const targetEmpty = !virtualBoard[pm.to.r][pm.to.c];
+                        virtualBoard[pm.to.r][pm.to.c] = piece;
+                        virtualBoard[pm.from.r][pm.from.c] = null;
+
+                        // Virtual castling handling
+                        if (piece.toLowerCase() === 'k' && Math.abs(pm.to.c - pm.from.c) === 2) {
+                            const isKingside = pm.to.c > pm.from.c;
+                            const rookColFrom = isKingside ? 7 : 0;
+                            const rookColTo = isKingside ? 5 : 3;
+                            const rook = virtualBoard[pm.from.r][rookColFrom];
+                            if (rook && rook.toLowerCase() === 'r') {
+                                virtualBoard[pm.from.r][rookColTo] = rook;
+                                virtualBoard[pm.from.r][rookColFrom] = null;
+                            }
+                        }
+
+                        // Virtual en passant handling
+                        if (piece.toLowerCase() === 'p' && pm.from.c !== pm.to.c && targetEmpty) {
+                            virtualBoard[pm.from.r][pm.to.c] = null;
+                        }
+
+                        // Virtual pawn promotion (default to Queen for path selection)
+                        if (piece.toLowerCase() === 'p' && (pm.to.r === 0 || pm.to.r === 7)) {
+                            const promotedPiece = piece === 'P' ? 'Q' : 'q';
+                            virtualBoard[pm.to.r][pm.to.c] = promotedPiece;
+                        }
+                    }
+                }
+                return virtualBoard;
+            }
+
+            function drawPremoveArrows(force = false) {
+                let overlay = document.getElementById('premove-svg-overlay');
+                const currentStr = JSON.stringify(premoveQueue);
+
+                // Short-circuit to avoid DOM churn if the queue contents are unchanged
+                if (!force && overlay && currentStr === lastPremoveQueueStr) {
+                    return;
+                }
+                lastPremoveQueueStr = currentStr;
+
+                if (overlay) {
+                    overlay.remove();
+                }
+
+                if (premoveQueue.length === 0) return;
+
+                overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                overlay.setAttribute('id', 'premove-svg-overlay');
+                overlay.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:4;';
+
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', 'premove-arrowhead');
+                marker.setAttribute('viewBox', '0 0 10 10');
+                marker.setAttribute('refX', '8');
+                marker.setAttribute('refY', '5');
+                marker.setAttribute('markerWidth', '6');
+                marker.setAttribute('markerHeight', '6');
+                marker.setAttribute('orient', 'auto-start-reverse');
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', 'M 0 1.5 L 10 5 L 0 8.5 z');
+                path.setAttribute('fill', '#3b82f6');
+                marker.appendChild(path);
+                defs.appendChild(marker);
+                overlay.appendChild(defs);
+
+                const boardRect = boardEl.getBoundingClientRect();
+                if (boardRect.width === 0 || boardRect.height === 0) {
+                    return;
+                }
+
+                premoveQueue.forEach((pm, idx) => {
+                    const fromSq = sq(pm.from.r, pm.from.c);
+                    const toSq = sq(pm.to.r, pm.to.c);
+                    if (!fromSq || !toSq) return;
+
+                    const fromRect = fromSq.getBoundingClientRect();
+                    const toRect = toSq.getBoundingClientRect();
+
+                    const x1 = (fromRect.left - boardRect.left) + fromRect.width / 2;
+                    const y1 = (fromRect.top - boardRect.top) + fromRect.height / 2;
+                    const x2 = (toRect.left - boardRect.left) + toRect.width / 2;
+                    const y2 = (toRect.top - boardRect.top) + toRect.height / 2;
+
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', x1);
+                    line.setAttribute('y1', y1);
+                    line.setAttribute('x2', x2);
+                    line.setAttribute('y2', y2);
+                    line.setAttribute('stroke', '#3b82f6');
+                    line.setAttribute('stroke-width', '4');
+                    line.setAttribute('opacity', '0.75');
+                    line.setAttribute('marker-end', 'url(#premove-arrowhead)');
+                    overlay.appendChild(line);
+
+                    // Midpoint step indicator badge for chained and overlapping pre-moves
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+
+                    const badgeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', midX);
+                    circle.setAttribute('cy', midY);
+                    circle.setAttribute('r', '8');
+                    circle.setAttribute('fill', '#16162a');
+                    circle.setAttribute('stroke', '#3b82f6');
+                    circle.setAttribute('stroke-width', '1.5');
+
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', midX);
+                    text.setAttribute('y', midY);
+                    text.setAttribute('fill', '#ffffff');
+                    text.setAttribute('font-size', '9px');
+                    text.setAttribute('font-weight', 'bold');
+                    text.setAttribute('font-family', 'sans-serif');
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('dominant-baseline', 'central');
+                    text.textContent = idx + 1;
+
+                    badgeG.appendChild(circle);
+                    badgeG.appendChild(text);
+                    overlay.appendChild(badgeG);
+                });
+
+                boardEl.appendChild(overlay);
+            }
 
             function getSquareSize() {
                 const s = boardEl.querySelector('.square');
@@ -445,7 +582,7 @@
                 // Reset AI request sequence and thinking state on load/reconnect to cancel stale requests
                 aiRequestSeq = 0;
                 aiThinking = false;
-                premove = null;
+                premoveQueue = [];
                 refreshPremoveHighlight();
                 whiteAlertFired = false;
                 blackAlertFired = false;
@@ -604,7 +741,9 @@
                         // ADD THESE:
                         d.draggable = true;
                         d.ondragstart = e => {
-                            const piece = board[r][c];
+                            const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                            const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                            const piece = vBoard[r][c];
                             if (!piece) {
                                 if (blindfoldMode) {
                                     showStatus('No piece there', true);
@@ -737,10 +876,14 @@
                     el.classList.remove('premove');
                 });
 
-                if (!premove) return;
+                premoveQueue.forEach(pm => {
+                    const fromSq = sq(pm.from.r, pm.from.c);
+                    const toSq = sq(pm.to.r, pm.to.c);
+                    if (fromSq) fromSq.classList.add('premove');
+                    if (toSq) toSq.classList.add('premove');
+                });
 
-                sq(premove.from.r, premove.from.c).classList.add('premove');
-                sq(premove.to.r, premove.to.c).classList.add('premove');
+                drawPremoveArrows();
             }
 
             function highlightCheck() {
@@ -805,7 +948,9 @@
             SELECTION & MOVES
             ========================================================== */
             async function selectPiece(r, c) {
-                const p = board[r][c];
+                const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                const p = vBoard[r][c];
 
                 if (!p || paused || gameOver) return;
 
@@ -895,7 +1040,9 @@
             async function tryMove(fr, fc, tr, tc) {
                 if (paused || gameOver) return;
 
-                const p = board[fr][fc];
+                const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                const p = vBoard[fr][fc];
                 if (!p) return;
 
                 // PREMOVE DURING AI TURN
@@ -904,10 +1051,10 @@
                     pColor(p) === playerColor &&
                     turn !== playerColor
                 ) {
-                    premove = {
+                    premoveQueue.push({
                         from: { r: fr, c: fc },
                         to: { r: tr, c: tc }
-                    };
+                    });
 
                     refreshPremoveHighlight();
                     showStatus("Premove queued", false);
@@ -1030,6 +1177,10 @@
                         showStatus(data.message, true);
                         flashBoard();
                         deselect();
+                        if (premoveQueue.length > 0) {
+                            premoveQueue = [];
+                            refreshPremoveHighlight();
+                        }
                     }
                 } catch (e) {
                         await handleReconnect();
@@ -1124,9 +1275,8 @@
                             if (a11yMsg) announceMove(a11yMsg);
 
                             // Trigger queued premove if it exists
-                            if (premove) {
-                                const queued = premove;
-                                premove = null;
+                            if (premoveQueue.length > 0) {
+                                const queued = premoveQueue.shift();
                                 refreshPremoveHighlight();
 
                                 const piece = board[queued.from.r][queued.from.c];
@@ -1135,6 +1285,8 @@
                                         tryMove(queued.from.r, queued.from.c, queued.to.r, queued.to.c);
                                     }, 150);
                                 } else {
+                                    premoveQueue = [];
+                                    refreshPremoveHighlight();
                                     showStatus("Premove cancelled: piece captured or invalid", true);
                                 }
                             }
@@ -1159,7 +1311,9 @@
                 if (replayMode) return;
                 if (dragging) return;
 
-                const piece = board[r][c];
+                const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                const piece = vBoard[r][c];
 
                 const aiPremoveMode =
                     gameMode === 'ai' &&
@@ -1175,10 +1329,10 @@
                     // PREMOVE CLICK
                     if (aiPremoveMode) {
 
-                        premove = {
+                        premoveQueue.push({
                             from: { r: selected.r, c: selected.c },
                             to: { r, c }
-                        };
+                        });
 
                         refreshPremoveHighlight();
 
@@ -1221,7 +1375,9 @@
 
             function onDragStart(e, r, c) {
 
-                const piece = board[r][c];
+                const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                const piece = vBoard[r][c];
                 if (!piece) {
                     if (blindfoldMode) {
                         showStatus('No piece there', true);
@@ -1367,25 +1523,11 @@
                     const moveNum = Math.floor(whiteIdx / 2) + 1;
                     const row = document.createElement('div');
                     row.className = 'move-row';
-
-                    const numSpan = document.createElement('span');
-                    numSpan.className = 'move-num';
-                    numSpan.textContent = `${moveNum}.`;
-
-                    const whiteSpan = document.createElement('span');
-                    whiteSpan.className = 'move-white';
-                    whiteSpan.textContent = history[whiteIdx]?.notation ?? '';
-
-                    row.appendChild(numSpan);
-                    row.appendChild(whiteSpan);
-
-                    if (history[blackIdx]) {
-                        const blackSpan = document.createElement('span');
-                        blackSpan.className = 'move-black';
-                        blackSpan.textContent = history[blackIdx].notation;
-                        row.appendChild(blackSpan);
-                    }
-
+                    row.innerHTML = `
+                        <span class="move-num">${moveNum}.</span>
+                        <span class="move-white">${history[whiteIdx]?.notation ?? ''}</span>
+                        ${history[blackIdx] ? `<span class="move-black">${history[blackIdx].notation}</span>` : ''}
+                    `;
                     movesEl.appendChild(row);
                 }
             }
@@ -2172,50 +2314,12 @@
             WELCOME & CONFIRMATION LOGIC
             ========================================================== */
             let confirmCallback = null;
-
-            /**
-             * Safely render a confirm-dialog message that may contain a small
-             * whitelist of formatting tags (<br>, <b>, <div> with an inline
-             * style). All other HTML is treated as plain text, preventing XSS
-             * even if a future caller accidentally passes server-controlled data.
-             */
-            function setSafeConfirmHTML(el, html) {
-                // Parse into an inert document so no scripts execute during parsing.
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const allowedTags = new Set(['BR', 'B', 'DIV', 'SPAN']);
-                const allowedStyles = ['line-height', 'font-size'];
-
-                function sanitizeNode(src, dest) {
-                    src.childNodes.forEach(node => {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            dest.appendChild(document.createTextNode(node.textContent));
-                        } else if (node.nodeType === Node.ELEMENT_NODE && allowedTags.has(node.tagName)) {
-                            const clone = document.createElement(node.tagName);
-                            // Only copy safe inline-style properties, nothing else.
-                            if (node.style) {
-                                allowedStyles.forEach(prop => {
-                                    if (node.style[prop]) clone.style[prop] = node.style[prop];
-                                });
-                            }
-                            sanitizeNode(node, clone);
-                            dest.appendChild(clone);
-                        } else {
-                            // Unknown tag: render its text content only.
-                            sanitizeNode(node, dest);
-                        }
-                    });
-                }
-
-                el.textContent = '';
-                sanitizeNode(doc.body, el);
-            }
-
             function showConfirm(title, msg, callback, titleColor = '#ff6b6b') {
                 if (confirmTitle) {
                     confirmTitle.textContent = title;
                     confirmTitle.style.color = titleColor;
                 }
-                if (confirmMessage) setSafeConfirmHTML(confirmMessage, msg);
+                if (confirmMessage) confirmMessage.innerHTML = msg;
                 confirmCallback = callback;
                 confirmOverlay.classList.add('active');
             }
@@ -2297,7 +2401,7 @@
                 // Reset AI request sequence and thinking state on new game
                 aiRequestSeq = 0;
                 aiThinking = false;
-                premove = null;
+                premoveQueue = [];
                 refreshPremoveHighlight();
 
                 clearTimeout(pgnDownloadTimeout);
@@ -3294,7 +3398,7 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
             boardEl.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
 
-                premove = null;
+                premoveQueue = [];
                 refreshPremoveHighlight();
                 showStatus("Premove cancelled", false);
             });
@@ -3305,18 +3409,12 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                 const squareEl = e.target.closest('.square');
                 if (!squareEl) return;
 
-                if (paused || gameOver || replayMode) return;
-
-                const r = parseInt(squareEl.dataset.r, 10);
-                const c = parseInt(squareEl.dataset.c, 10);
-                const piece = board[r][c];
-
-                touchStartPos = { x: touch.clientX, y: touch.clientY };
-                touchTapSquare = { r, c };
-                touchDragSrc = null;
-                touchDragging = false;
-
-                if (!piece) return;
+                const r = parseInt(squareEl.dataset.r);
+                const c = parseInt(squareEl.dataset.c);
+                const isPremoveMode = gameMode === 'ai' && turn !== playerColor;
+                const vBoard = isPremoveMode ? getVirtualBoard() : board;
+                const piece = vBoard[r][c];
+                if (!piece || paused || gameOver) return;
 
                 // Check if the piece is playable by the current player (including AI premoves)
                 const isPremoveDrag = gameMode === 'ai' && turn !== playerColor && pColor(piece) === playerColor;
@@ -3599,66 +3697,14 @@ if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
                 await resumeGame();
             });
 
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                if (premoveQueue.length > 0) {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        drawPremoveArrows(true);
+                    }, 100);
+                }
+            });
+
 })();
-
-function updateDailyStreak() {
-
-    const today =
-        new Date().toDateString();
-
-    let streakData =
-        JSON.parse(
-            localStorage.getItem("dailyStreak")
-        );
-
-    if (!streakData) {
-
-        streakData = {
-            streak: 1,
-            lastPlayed: today
-        };
-
-    } else {
-
-        const lastPlayed =
-            new Date(streakData.lastPlayed);
-
-        const currentDate =
-            new Date(today);
-
-        const diffDays =
-            Math.floor(
-                (currentDate - lastPlayed)
-                / (1000 * 60 * 60 * 24)
-            );
-
-        if (diffDays === 1) {
-
-            streakData.streak += 1;
-
-        } else if (diffDays > 1) {
-
-            streakData.streak = 1;
-        }
-
-        streakData.lastPlayed = today;
-    }
-
-    localStorage.setItem(
-        "dailyStreak",
-        JSON.stringify(streakData)
-    );
-
-    const streakEl =
-        document.getElementById(
-            "streak-count"
-        );
-
-    if (streakEl) {
-
-        streakEl.textContent =
-            streakData.streak;
-    }
-}
-
-window.addEventListener("load", updateDailyStreak);
