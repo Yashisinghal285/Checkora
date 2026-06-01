@@ -1122,14 +1122,6 @@ def cleanup_cron(request):
             'message': str(e)
         }, status=500)
 
-def privacy_view(request):
-    """Directly serve the static privacy template page."""
-    return render(request, 'game/privacy.html')
-
-def terms_view(request):
-    """Directly serve the static terms and conditions template page."""
-    return render(request, 'game/terms.html')
-
 def password_reset_account_selection(request):
 
     email = request.GET.get('email')

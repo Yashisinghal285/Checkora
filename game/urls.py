@@ -30,12 +30,6 @@ urlpatterns = [
     
     path('delete-account/', views.delete_account, name='delete_account'),
     path('confirm-delete/<uidb64>/<token>/', views.confirm_delete_account, name='confirm_delete_account'),
-
-    # Privacy Policy Fallback Router
-    path('privacy.html', views.privacy_view, name='privacy'),
-
-    # Terms and Conditions Fallback Router
-    path('terms.html', views.terms_view, name='terms'),
     
     path(
         'password-reset-account-selection/',
