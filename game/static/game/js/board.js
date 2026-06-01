@@ -3614,7 +3614,7 @@ document.querySelectorAll('a[href="/"]').forEach(link => {
     link.addEventListener('click', (e) => {
         if (shouldConfirmLeave()) {
             e.preventDefault();
-            leaveConfirmOverlay.style.display = 'flex';
+            leaveConfirmOverlay.classList.add('active');
         }
     });
 });
@@ -3624,7 +3624,7 @@ if (leaveConfirmYes) leaveConfirmYes.addEventListener('click', () => {
 });
 
 if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
-    leaveConfirmOverlay.style.display = 'none';
+    leaveConfirmOverlay.classList.remove('active');
 });
 
             
