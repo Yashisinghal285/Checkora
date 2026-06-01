@@ -69,7 +69,6 @@ Join our Discord community for updates, support, and games: https://discord.gg/D
 | Material Score Panel | Live material advantage tracking that updates dynamically during gameplay                           |
 | REST API             | Clean JSON endpoints powering a decoupled frontend                                                  |
 | PvP & PvE Modes      | Play against a friend or challenge the AI                                                           |
-| FAQ                  | In-page frequently asked questions accessible from the landing page                                 |
 
 ---
 
@@ -187,20 +186,18 @@ Checkora/
 │   │       └── favicon.jpeg       # Small browser favicon
 │   ├── templates/                 # Server-side HTML render blueprints
 │   │   ├── 404.html               # Custom 404 error page template
-│   │   ├── 500.html               # Custom 500 error page template
 │   │   ├── robots.txt             # Web crawler configuration instructions
 │   │   ├── sitemap.xml            # SEO indexing guide
 │   │   └── game/                  # Namespace folder matching Django conventions
 │   │       ├── includes/          # Reusable UI partial layout blocks
 │   │       │   └── messages.html  # Banner rendering Django alert notifications
 │   │       ├── board.html         # Interactive gameplay chessboard and player cards
-│   │       ├── landing.html       # Mode lobby selection screen with integrated FAQ, Privacy Policy, Terms & Conditions, and Contact Us modals
+│   │       ├── landing.html       # Mode lobby selection screen
 │   │       ├── login.html         # Sign-in form interface
 │   │       ├── register.html      # Create account interface
 │   │       ├── verify_otp.html    # Two-factor verification panel
 │   │       ├── rules.html         # Gameplay and chess educational rules guide
 │   │       ├── stats.html         # User match metrics, profiles, and scoreboards
-│   │       ├── welcome_email.html # User email register , sign in
 │   │       ├── password_reset.html # Password reset trigger page
 │   │       ├── password_reset_complete.html # Confirmation of successful reset
 │   │       ├── password_reset_confirm.html  # Verification form link target
