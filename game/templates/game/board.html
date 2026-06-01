@@ -528,12 +528,12 @@
     </div>
 
    <!-- ========== LEAVE GAME CONFIRMATION MODAL ========== -->
-<div class="promo-overlay" id="leaveConfirmOverlay" style="display:none;">
-    <div class="promo-dialog" style="max-width: 340px; text-align: center;">
-        <div class="promo-title" style="font-size: 1.3rem; color: #f0c040; margin-bottom: 10px;">
+<div class="promo-overlay" id="leaveConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="leaveConfirmTitle" aria-describedby="leaveConfirmMessage" aria-hidden="true">
+    <div class="promo-dialog" id="leaveConfirmDialog" tabindex="-1" style="max-width: 340px; text-align: center;">
+        <div class="promo-title" id="leaveConfirmTitle" style="font-size: 1.3rem; color: #f0c040; margin-bottom: 10px;">
             Leave the Game?
         </div>
-        <p style="color: #ccc; margin-bottom: 25px; font-size: 0.95rem;">
+        <p id="leaveConfirmMessage" style="color: #ccc; margin-bottom: 25px; font-size: 0.95rem;">
             Are you sure you want to go back to Home? Your current game progress will be lost.
         </p>
         <div style="display: flex; gap: 12px; justify-content: center;">

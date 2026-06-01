@@ -3518,7 +3518,8 @@
                     confirmOverlay?.classList.contains('active') ||
                     drawOverlay?.classList.contains('active') ||
                     gameOverOverlay?.classList.contains('active') ||
-                    welcomeOverlay?.classList.contains('active');
+                    welcomeOverlay?.classList.contains('active') ||
+                    leaveConfirmOverlay?.classList.contains('active');
 
             // Allow Escape to close overlays
             if (hasBlockingOverlay && key !== 'escape') {
@@ -3547,7 +3548,7 @@
                 } else if (key === 'h') {
                     e.preventDefault();
                     if (shouldConfirmLeave()) {
-                        leaveConfirmOverlay.classList.remove('active');
+                        openLeaveConfirm();
                     } else {
                         window.location.href = '/';
                     }
@@ -3565,6 +3566,10 @@
 
                     if (fenOverlay?.classList.contains('active')) {
                         fenOverlay.classList.remove('active');
+                    }
+
+                    if (leaveConfirmOverlay?.classList.contains('active')) {
+                        closeLeaveConfirm();
                     }
                 }
             });
@@ -3606,26 +3611,55 @@
 
 // Leave Game confirmation modal logic
 const leaveConfirmOverlay = document.getElementById('leaveConfirmOverlay');
+const leaveConfirmDialog = document.getElementById('leaveConfirmDialog');
 const leaveConfirmYes = document.getElementById('leaveConfirmYes');
 const leaveConfirmNo = document.getElementById('leaveConfirmNo');
 const shouldConfirmLeave = () => !gameOver && !welcomeOverlay.classList.contains('active');
+let leaveConfirmFocusReturn = null;
+
+function openLeaveConfirm() {
+    if (!leaveConfirmOverlay) return;
+    leaveConfirmFocusReturn = document.activeElement;
+    leaveConfirmOverlay.classList.add('active');
+    leaveConfirmOverlay.setAttribute('aria-hidden', 'false');
+    if (typeof announceMove === 'function') {
+        announceMove('Confirm navigation to home page');
+    }
+    setTimeout(() => {
+        if (leaveConfirmNo) {
+            leaveConfirmNo.focus();
+        } else if (leaveConfirmDialog) {
+            leaveConfirmDialog.focus();
+        }
+    }, 0);
+}
+
+function closeLeaveConfirm() {
+    if (!leaveConfirmOverlay) return;
+    leaveConfirmOverlay.classList.remove('active');
+    leaveConfirmOverlay.setAttribute('aria-hidden', 'true');
+    if (leaveConfirmFocusReturn && typeof leaveConfirmFocusReturn.focus === 'function') {
+        leaveConfirmFocusReturn.focus();
+    }
+    leaveConfirmFocusReturn = null;
+}
+
+function confirmLeave() {
+    window.location.href = '/';
+}
 
 document.querySelectorAll('a[href="/"]').forEach(link => {
     link.addEventListener('click', (e) => {
         if (shouldConfirmLeave()) {
             e.preventDefault();
-            leaveConfirmOverlay.classList.add('active');
+            openLeaveConfirm();
         }
     });
 });
 
-if (leaveConfirmYes) leaveConfirmYes.addEventListener('click', () => {
-    window.location.href = '/';
-});
+if (leaveConfirmYes) leaveConfirmYes.addEventListener('click', confirmLeave);
 
-if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', () => {
-    leaveConfirmOverlay.classList.remove('active');
-});
+if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', closeLeaveConfirm);
 
             
             function showAssetWarning() {
