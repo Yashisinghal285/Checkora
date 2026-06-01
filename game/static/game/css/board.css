@@ -70,10 +70,21 @@ body {
 
 /* Logo text */ 
 .logo-text {
-    font-family: 'Cinzel', serif;
+    font-family: Cinzel, serif;
     font-size: 26px;
     font-weight: 700;
     letter-spacing: 2px;
+}
+
+.promo-logo .logo-text {
+    font-size: 1.8rem;
+}
+
+.logo-white {
+    color: #ffffff;
+}
+
+.logo-gold {
     color: #f0c040;
 }
 
@@ -85,6 +96,8 @@ body {
     .logo-text {
         font-size: 20px;
     }
+
+
 }
 
 .header .badge {
@@ -1395,12 +1408,19 @@ body {
     gap: 12px;
 }
 
-.promo-logo span {
+.promo-logo .logo-text {
     font-family: 'Cinzel', serif;
     font-size: 1.8rem;
     font-weight: 700;
-    color: #f0c040;
     letter-spacing: 2px;
+}
+
+.promo-logo .logo-white {
+    color: #ffffff;
+}
+
+.promo-logo .logo-gold {
+    color: #f0c040;
 }
 
 .promo-title img {

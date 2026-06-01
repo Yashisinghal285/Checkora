@@ -69,13 +69,14 @@
             <div class="promo-title"
                 style="font-size: 1.6rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <div class="promo-title promo-logo">
+    <img src="{% static 'game/checkora_icon_only.png' %}"
+         style="height: 3rem; width: auto; object-fit: contain;"
+         alt="Checkora">
 
-                    <img src="{% static 'game/checkora_icon_only.png' %}"
-                        style="height: 3rem; width: auto; object-fit: contain;" alt="Checkora">
-
-                    <span>CHECKORA</span>
-
-                </div>
+    <span class="logo-text">
+        <span class="logo-white">CHECK</span><span class="logo-gold">ORA</span>
+    </span>
+</div>
 
             </div>
             <p style="color: #aaa; margin-bottom: 30px; font-size: 0.95rem;">Enter names and select a game mode.</p>
@@ -234,8 +235,10 @@
         
         <div class="logo-container">
             <a href="{% url 'landing' %}" class="logo-link">
-                <img src="{% static 'game/checkora_icon_only.png' %}" class="logo-icon-img" alt="">
-                <span class="logo-text">Checkora</span>
+                <img src="{% static 'game/checkora_icon_only.png' %}" class="logo-icon-img" alt="Checkora">
+                <span class="logo-text">
+    <span class="logo-white">CHECK</span><span class="logo-gold">ORA</span>
+</span>
             </a>
             <span class="badge" id="modeBadge">PVP</span>
         </div>
