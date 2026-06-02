@@ -357,6 +357,7 @@ jobs:
           chrome-version: stable
 
       - name: 📦 Cache static files
+        id: static-cache
         uses: actions/cache@v4
         with:
           path: staticfiles/
@@ -365,6 +366,7 @@ jobs:
             static-${{ runner.os }}-
 
       - name: 📦 Collect static files
+        if: steps.static-cache.outputs.cache-hit != 'true'
         run: python manage.py collectstatic --noinput
 
       - name: 🧪 Run Selenium E2E Tests
