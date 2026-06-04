@@ -69,7 +69,10 @@
         
         <div class="auth-footer">
             Didn't receive the code? 
-            <a href="{% url 'resend_otp' %}" id = "resend-link">Try again</a>
+            <form id="resend-form" method="POST" action="{% url 'resend_otp' %}" style="display: inline;">
+                {% csrf_token %}
+                <a href="#" id="resend-link" onclick="document.getElementById('resend-form').submit(); return false;">Try again</a>
+            </form>
             <span id="timer" data-remaining-time="{{ remaining_time|default:0 }}"></span>
         </div>
     </div>

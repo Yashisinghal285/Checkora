@@ -292,7 +292,7 @@
 
     {% endif %}
 
-    {% if lesson.lesson_steps %}
+    {% if lesson_steps %}
 
     <div class="lesson-practice">
 
@@ -317,8 +317,8 @@
 
     </div>
 
-    {{ lesson.lesson_steps|json_script:"lesson-steps-data" }}
-    {{ lesson.practice_position|json_script:"practice-position-data" }}
+    {{ lesson_steps|json_script:"lesson-steps-data" }}
+    {{ practice_position|json_script:"practice-position-data" }}
 
     {% endif %}
 

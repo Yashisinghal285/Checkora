@@ -2002,3 +2002,98 @@ class GameResultMoveHistoryTest(TestCase):
         self.assertEqual(res.winner, 'white')
         self.assertEqual(len(res.moves), 1)
         self.assertEqual(res.moves[0]['notation'], 'e4#')
+
+
+class AdditionalViewsSecurityAndLessonsTest(TestCase):
+    """Test suite for the new view-level security checks and lesson context mapping."""
+
+    def test_inactive_account_merge_prevention(self):
+        # Create two different inactive users
+        user_a = User.objects.create_user(
+            username='inactive_a',
+            email='inactive_a@example.com',
+            password='Password123!',
+            is_active=False
+        )
+        user_b = User.objects.create_user(
+            username='inactive_b',
+            email='inactive_b@example.com',
+            password='Password123!',
+            is_active=False
+        )
+
+        # Post username from A and email from B
+        payload = {
+            'username': 'inactive_a',
+            'email': 'inactive_b@example.com',
+            'password1': 'NewPassword123!',
+            'password2': 'NewPassword123!',
+        }
+
+        # Registration should fall back to generic flow
+        response = self.client.post('/register/', data=payload)
+        self.assertRedirects(response, '/verify-otp/')
+
+        # Verify neither user got merged/overwritten
+        user_a.refresh_from_db()
+        user_b.refresh_from_db()
+        self.assertEqual(user_a.email, 'inactive_a@example.com')
+        self.assertEqual(user_b.username, 'inactive_b')
+        self.assertEqual(user_b.email, 'inactive_b@example.com')
+        self.assertFalse(user_a.check_password('NewPassword123!'))
+        self.assertFalse(user_b.check_password('NewPassword123!'))
+
+    def test_resend_otp_post_only(self):
+        # Verify GET returns 405 Method Not Allowed
+        response = self.client.get('/resend-otp/')
+        self.assertEqual(response.status_code, 405)
+
+        # Setup session for active registration to test POST
+        session = self.client.session
+        session['registration_user_id'] = -1
+        session['registration_email'] = 'test@example.com'
+        session.save()
+
+        # POST should work
+        response = self.client.post('/resend-otp/')
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, '/verify-otp/')
+
+    def test_resend_otp_deferred_session_writes(self):
+        user = User.objects.create_user(
+            username='temp_user',
+            email='temp@example.com',
+            password='Password123!',
+            is_active=False
+        )
+        session = self.client.session
+        session['registration_user_id'] = user.id
+        initial_hash = 'initial_otp_hash_value'
+        session['registration_otp_hash'] = initial_hash
+        session.save()
+
+        # Mock send_mail to raise SMTPException
+        with mock.patch('game.views.send_mail', side_effect=SMTPException('SMTP error')):
+            response = self.client.post('/resend-otp/', follow=True)
+
+        self.assertContains(response, 'Failed to resend OTP. Please try again.')
+        
+        # Verify the session registration_otp_hash was NOT changed/mutated
+        session = self.client.session
+        self.assertEqual(session.get('registration_otp_hash'), initial_hash)
+
+    def test_lesson_detail_view_exposes_context(self):
+        # Test beginner lesson "How Pieces Move"
+        response = self.client.get(reverse('lesson_detail', args=['How Pieces Move']))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('lesson_steps', response.context)
+        self.assertIn('practice_position', response.context)
+        self.assertNotEqual(response.context['lesson_steps'], [])
+        self.assertIsNotNone(response.context['practice_position'])
+
+        # Test intermediate lesson "Forks" which has steps mapping
+        response = self.client.get(reverse('lesson_detail', args=['Forks']))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('lesson_steps', response.context)
+        self.assertIn('practice_position', response.context)
+        self.assertNotEqual(response.context['lesson_steps'], [])
