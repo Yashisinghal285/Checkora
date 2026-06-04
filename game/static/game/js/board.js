@@ -1643,6 +1643,9 @@
                             a11yMsg = `${capturer} captured ${capturedColor}'s ${pieceName} on ${targetSquare}. `;
                         } else if (data.move_history && data.move_history.length > 0) {
                             const lastMove = data.move_history[data.move_history.length - 1].notation;
+                            if (window.checkLessonMove && lastMove) {
+                                window.checkLessonMove(lastMove);
+                            }
                             a11yMsg = `${playedColor} played ${lastMove}. `;
                         }
 
@@ -1757,6 +1760,9 @@
                             a11yMsg = `${capturer} captured ${capturedColor}'s ${pieceName} on ${targetSquare}. `;
                         } else if (data.move_history && data.move_history.length > 0) {
                             const lastMove = data.move_history[data.move_history.length - 1].notation;
+                            if (window.checkLessonMove && lastMove) {
+                                window.checkLessonMove(lastMove);
+                            }
                             a11yMsg = `AI played ${lastMove}. `;
                         }
 
@@ -1988,6 +1994,16 @@
             UI UPDATES
             ========================================================== */
             function updateTurn() {
+                if (
+                    !turnEl ||
+                    !whiteNameLabel ||
+                    !blackNameLabel ||
+                    !wCapEl ||
+                    !bCapEl
+                ) {
+                    return;
+                }
+                
                 const badge = turnEl;
                 badge.className = 'turn-badge ' + turn;
                 
@@ -3317,6 +3333,7 @@
                     errorDiv.style.display = 'none';
                 }
             };
+            if (pveOptions) {
             const colorBtns = pveOptions.querySelectorAll('.color-choice');
             colorBtns.forEach(btn => {
                 btn.onclick = () => {
@@ -3329,7 +3346,7 @@
                     selectedPveColor = btn.dataset.color;
                 };
             });
-
+        } 
             if (startAIBtn) startAIBtn.onclick = async () => {
                 const wNameInput = document.getElementById('whiteNameInput');
                 const errorDiv = document.getElementById('nameError');
