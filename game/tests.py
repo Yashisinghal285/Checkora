@@ -2181,6 +2181,9 @@ class OtpBruteForceProtectionTest(TestCase):
     """Test suite for OTP brute-force protection."""
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
         self.user = User.objects.create_user(
             username='otp_test_user',
             email='otp_test@example.com',
@@ -2318,10 +2321,8 @@ class OtpBruteForceProtectionTest(TestCase):
         session['otp_failed_attempts'] = 4
         session.save()
 
-        import hashlib
         from django.core.cache import cache
-        email_hash = hashlib.sha256(self.user.email.lower().strip().encode()).hexdigest()
-        cache_key = f"otp_failed_attempts_{email_hash}"
+        cache_key = f"otp_failed_attempts_user_{self.user.id}"
         cache.set(cache_key, 4, timeout=900)
 
         session = self.client.session
@@ -2331,6 +2332,35 @@ class OtpBruteForceProtectionTest(TestCase):
         response = self.client.post(self.verify_url, {'otp': '000000'}, follow=True)
         self.assertRedirects(response, self.register_url)
         self.assertContains(response, 'Too many incorrect attempts. Please register again.')
+
+    def test_different_registrations_do_not_share_lockout_budget(self):
+        """A second client starting a dummy registration flow does not burn the budget of a legit pending user."""
+        # 1. Setup legit user session
+        session_legit = self.client.session
+        session_legit['registration_user_id'] = self.user.id
+        session_legit['registration_otp_hash'] = self.correct_hash
+        session_legit['otp_created_at'] = time.time()
+        session_legit['registration_email'] = self.user.email
+        session_legit.save()
+
+        # 2. Setup attacker session (dummy flow with same email)
+        attacker_client = self.client_class()
+        session_attacker = attacker_client.session
+        session_attacker['registration_user_id'] = -1  # Dummy
+        session_attacker['registration_otp_hash'] = 'dummyhash'
+        session_attacker['otp_created_at'] = time.time()
+        session_attacker['registration_email'] = self.user.email
+        session_attacker.save()
+
+        # Attacker fails OTP 5 times on the dummy flow
+        for _ in range(5):
+            response = attacker_client.post(self.verify_url, {'otp': '000000'})
+        
+        # Verify that the legit user session's counter is still untouched (can still verify OTP successfully)
+        response_legit = self.client.post(self.verify_url, {'otp': self.correct_otp}, follow=True)
+        self.assertRedirects(response_legit, reverse('index'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
 
 
 
