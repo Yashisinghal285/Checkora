@@ -157,6 +157,9 @@
       <div class="ambient-glow glow-gold"></div>
       <div class="ambient-glow glow-blue"></div>
 
+      <div id="chess-board-bg"></div>
+      <div class="hero-board-vignette"></div>
+
       <div class="hero-inner-wrapper">
         <div class="architecture-badge">
           <span class="live-pulse"></span>
@@ -178,6 +181,72 @@
           <a href="#about" class="btn-secondary-ghost">Learn More</a>
         </div>
       </div>
+
+      <script>
+        const board = document.getElementById('chess-board-bg');
+        const pieces = ['♛','♚','♞','♝','♜','♟'];
+        const darkSquares = [];
+
+        for(let r=0;r<20;r++){
+          for(let c=0;c<20;c++){
+            const sq = document.createElement('div');
+            sq.className = (r+c)%2===1 ? 'csq dark' : 'csq light';
+            sq.dataset.r = r; sq.dataset.c = c;
+            board.appendChild(sq);
+            if((r+c)%2===1) darkSquares.push({el:sq,r,c});
+          }
+        }
+
+        function isBehindText(r,c){ return r>=7&&r<=13&&c>=7&&c<=13; }
+
+        function triggerPiece(zone){
+          let pool;
+          if(zone==='right') pool = darkSquares.filter(s=>s.c>=5&&!s.el.dataset.busy);
+          else if(zone==='left') pool = darkSquares.filter(s=>s.c<=2&&!s.el.dataset.busy);
+          else pool = darkSquares.filter(s=>!s.el.dataset.busy);
+          if(!pool.length) return;
+          const chosen = pool[Math.floor(Math.random()*pool.length)];
+          const sq = chosen.el;
+          const behind = isBehindText(chosen.r, chosen.c);
+          sq.dataset.busy='1';
+          const dur = 2000+Math.random()*900;
+          const glow = document.createElement('div');
+          glow.className = behind ? 'sq-glow dim' : 'sq-glow bright';
+          glow.style.animationDuration = dur+'ms';
+          sq.appendChild(glow);
+          const icon = document.createElement('div');
+          icon.textContent = pieces[Math.floor(Math.random()*pieces.length)];
+          icon.className = behind ? 'sq-piece dim' : 'sq-piece bright';
+          icon.style.animationDuration = dur+'ms';
+          sq.appendChild(icon);
+          setTimeout(()=>{
+            glow.remove(); icon.remove(); delete sq.dataset.busy;
+          }, dur+50);
+        }
+
+      const intervals = [];
+      intervals.push(setInterval(()=>triggerPiece('right'), 450));
+      intervals.push(setInterval(()=>triggerPiece('left'), 550));
+      intervals.push(setInterval(()=>triggerPiece(null), 250));
+      intervals.push(setInterval(()=>triggerPiece(null), 380));
+      
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          intervals.forEach(id => clearInterval(id));
+          intervals.length = 0;
+        } else {
+          intervals.push(setInterval(()=>triggerPiece('right'), 450));
+          intervals.push(setInterval(()=>triggerPiece('left'), 550));
+          intervals.push(setInterval(()=>triggerPiece(null), 250));
+          intervals.push(setInterval(()=>triggerPiece(null), 380));
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        intervals.forEach(id => clearInterval(id));
+      });
+      </script>
     </main>
 
     <section id="about" class="about">
@@ -500,6 +569,7 @@
             <li><a href="#" class="footer-link" data-modal-trigger="privacyModal">Privacy Policy</a></li>
             <li><a href="#" class="footer-link" onclick="openTermsModal(); return false;">Terms & Conditions</a></li>     
             <li><a href="#" class="footer-link" onclick="openContactModal(); return false;">Contact Us</a></li>
+            <li><a href="{% url 'disclaimer' %}" class="footer-link">Disclaimer</a></li>
           </ul>
         </div>
       </div>
@@ -864,5 +934,6 @@
     });
   })();
   </script>
+    <script src="{% static 'game/js/dropdown.js' %}"></script>
   </body>
 </html>

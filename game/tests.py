@@ -2152,17 +2152,215 @@ class AdditionalViewsSecurityAndLessonsTest(TestCase):
         self.assertEqual(session.get('registration_otp_hash'), initial_hash)
 
     def test_lesson_detail_view_exposes_context(self):
-        # Test beginner lesson "How Pieces Move"
-        response = self.client.get(reverse('lesson_detail', args=['How Pieces Move']))
+        response = self.client.get(reverse('lesson_detail', args=['how-pieces-move']))
         self.assertEqual(response.status_code, 200)
         self.assertIn('lesson_steps', response.context)
         self.assertIn('practice_position', response.context)
         self.assertNotEqual(response.context['lesson_steps'], [])
         self.assertIsNotNone(response.context['practice_position'])
 
-        # Test intermediate lesson "Forks" which has steps mapping
-        response = self.client.get(reverse('lesson_detail', args=['Forks']))
+        response = self.client.get(
+            reverse('lesson_detail', args=['check-and-checkmate'])
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get(reverse('lesson_detail', args=['forks']))
         self.assertEqual(response.status_code, 200)
         self.assertIn('lesson_steps', response.context)
         self.assertIn('practice_position', response.context)
         self.assertNotEqual(response.context['lesson_steps'], [])
+
+    def test_lesson_detail_invalid_slug_returns_404(self):
+        response = self.client.get(
+            reverse('lesson_detail', args=['not-a-real-lesson'])
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+class OtpBruteForceProtectionTest(TestCase):
+    """Test suite for OTP brute-force protection."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        self.user = User.objects.create_user(
+            username='otp_test_user',
+            email='otp_test@example.com',
+            password='TestPassword123!',
+            is_active=False,
+        )
+        self.verify_url = reverse('verify_otp')
+        self.register_url = reverse('register')
+
+        # Correct OTP is '123456'
+        import hashlib
+        from django.conf import settings
+        self.correct_otp = '123456'
+        self.correct_hash = hashlib.sha256(
+            f"{self.correct_otp}:{settings.SECRET_KEY}".encode()
+        ).hexdigest()
+
+    def test_failed_otp_submissions_increment_counter(self):
+        """Failed OTP submissions should increment otp_failed_attempts in the session."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session.save()
+
+        # Submit incorrect OTP 1
+        response = self.client.post(self.verify_url, {'otp': '000000'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session.get('otp_failed_attempts'), 1)
+
+        # Submit incorrect OTP 2
+        response = self.client.post(self.verify_url, {'otp': '111111'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session.get('otp_failed_attempts'), 2)
+
+    def test_successful_otp_verification_clears_counter(self):
+        """Successful OTP verification clears otp_failed_attempts from the session."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session['otp_failed_attempts'] = 3
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': self.correct_otp}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('otp_failed_attempts', self.client.session)
+
+    def test_fifth_incorrect_otp_triggers_lockout(self):
+        """The 5th incorrect OTP submission triggers lockout."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session['registration_email'] = self.user.email
+        session['otp_failed_attempts'] = 4
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': '000000'}, follow=True)
+        # Lockout redirects to register
+        self.assertRedirects(response, self.register_url)
+        self.assertContains(response, 'Too many incorrect attempts. Please register again.')
+
+    def test_lockout_clears_all_registration_session_keys(self):
+        """Lockout clears all registration-related session keys."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session['registration_email'] = self.user.email
+        session['otp_failed_attempts'] = 4
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': '000000'})
+        self.assertRedirects(response, self.register_url)
+
+        # Ensure all keys are cleared
+        self.assertNotIn('registration_user_id', self.client.session)
+        self.assertNotIn('registration_otp_hash', self.client.session)
+        self.assertNotIn('otp_created_at', self.client.session)
+        self.assertNotIn('registration_email', self.client.session)
+        self.assertNotIn('otp_failed_attempts', self.client.session)
+
+    def test_otp_expiry_does_not_reset_failed_attempts_counter(self):
+        """OTP expiry does not reset the failed-attempt counter."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time() - 400  # Expired
+        session['otp_failed_attempts'] = 3
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': '000000'}, follow=True)
+        # Should redirect to register page due to expiry, but preserve failed attempts
+        self.assertRedirects(response, self.register_url)
+        self.assertContains(response, 'OTP has expired. Please register again.')
+        self.assertEqual(self.client.session.get('otp_failed_attempts'), 3)
+
+    def test_users_must_restart_registration_after_exhausting_attempts(self):
+        """Users must restart registration (redirected) after exhausting attempts."""
+        # Setup session without keys, simulating post-lockout state
+        session = self.client.session
+        session.save()
+
+        response = self.client.get(self.verify_url, follow=True)
+        self.assertRedirects(response, self.register_url)
+        self.assertContains(response, 'Session expired. Please register again.')
+
+    def test_existing_otp_verification_behavior_unchanged_for_valid_users(self):
+        """Existing OTP verification behavior remains unchanged for valid users (success case)."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': self.correct_otp}, follow=True)
+        self.assertRedirects(response, reverse('index'))
+        
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertIn('_auth_user_id', self.client.session)
+        
+        from django.contrib.messages import get_messages
+        messages_list = [m.message for m in get_messages(response.wsgi_request)]
+        self.assertIn('Registration successful! Welcome to Checkora.', messages_list)
+
+    def test_lockout_retained_after_session_cleared_by_attacker(self):
+        """Even if the attacker clears/resets their session attempts, the server-side cache retains attempts."""
+        session = self.client.session
+        session['registration_user_id'] = self.user.id
+        session['registration_otp_hash'] = self.correct_hash
+        session['otp_created_at'] = time.time()
+        session['registration_email'] = self.user.email
+        session['otp_failed_attempts'] = 4
+        session.save()
+
+        from django.core.cache import cache
+        cache_key = f"otp_failed_attempts_user_{self.user.id}"
+        cache.set(cache_key, 4, timeout=900)
+
+        session = self.client.session
+        session['otp_failed_attempts'] = 0
+        session.save()
+
+        response = self.client.post(self.verify_url, {'otp': '000000'}, follow=True)
+        self.assertRedirects(response, self.register_url)
+        self.assertContains(response, 'Too many incorrect attempts. Please register again.')
+
+    def test_different_registrations_do_not_share_lockout_budget(self):
+        """A second client starting a dummy registration flow does not burn the budget of a legit pending user."""
+        # 1. Setup legit user session
+        session_legit = self.client.session
+        session_legit['registration_user_id'] = self.user.id
+        session_legit['registration_otp_hash'] = self.correct_hash
+        session_legit['otp_created_at'] = time.time()
+        session_legit['registration_email'] = self.user.email
+        session_legit.save()
+
+        # 2. Setup attacker session (dummy flow with same email)
+        attacker_client = self.client_class()
+        session_attacker = attacker_client.session
+        session_attacker['registration_user_id'] = -1  # Dummy
+        session_attacker['registration_otp_hash'] = 'dummyhash'
+        session_attacker['otp_created_at'] = time.time()
+        session_attacker['registration_email'] = self.user.email
+        session_attacker.save()
+
+        # Attacker fails OTP 5 times on the dummy flow
+        for _ in range(5):
+            attacker_client.post(self.verify_url, {'otp': '000000'})
+        
+        # Verify that the legit user session's counter is still untouched (can still verify OTP successfully)
+        response_legit = self.client.post(self.verify_url, {'otp': self.correct_otp}, follow=True)
+        self.assertRedirects(response_legit, reverse('index'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+
+

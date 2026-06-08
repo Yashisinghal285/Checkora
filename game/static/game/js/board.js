@@ -2032,7 +2032,7 @@
 
                         if (move) {
                             const result = replayBoard.move(move);
-                            console.log("Replaying:", move, result)
+                        
                         }
                     }
 
@@ -2246,19 +2246,22 @@
                 replayMoves = [];
                 replayIndex = 0;
 
-                // USE ORIGINAL HISTORY INSTEAD OF REVERSED DOM
-                const moveSpans = document.querySelectorAll('.move-white, .move-black');
+                // Reverse the rows so we get the oldest moves first
+                const moveRows = Array.from(document.querySelectorAll('.move-row')).reverse();
 
-                moveSpans.forEach(span => {
-                    const move = span.textContent
-                        ?.replace(/[+#]/g, '')
-                        ?.replace(/\s+/g, '')
-                        ?.trim();
+                moveRows.forEach(row => {
+                    const spans = row.querySelectorAll('.move-white, .move-black');
+                    spans.forEach(span => {
+                        const move = span.textContent
+                            ?.replace(/[+#]/g, '')
+                            ?.replace(/\s+/g, '')
+                            ?.trim();
 
-                    if (move && move !== '...') {
-                        console.log("Replay move added:", move);
-                        replayMoves.push(move);
-                    }
+                        if (move && move !== '...') {
+                            console.log("Replay move added:", move);
+                            replayMoves.push(move);
+                        }
+                    });
                 });
 
                 console.log("FINAL REPLAY MOVES:", replayMoves);
@@ -3764,10 +3767,37 @@
                 });
             }
 
+            // Coordinates Visibility Preference
+            function initCoordinatesToggle() {
+                const showCoordsBtn = document.getElementById('showCoordinatesCheckbox');
+                if (!showCoordsBtn) return;
+
+                const savedShowCoords = localStorage.getItem('showCoordinates') !== 'false';
+                showCoordsBtn.checked = savedShowCoords;
+
+                if (!savedShowCoords && boardEl) {
+                    boardEl.classList.add('hide-coordinates');
+                }
+
+                showCoordsBtn.addEventListener('change', () => {
+                    if (showCoordsBtn.checked) {
+                        if (boardEl) boardEl.classList.remove('hide-coordinates');
+                        localStorage.setItem('showCoordinates', 'true');
+                    } else {
+                        if (boardEl) boardEl.classList.add('hide-coordinates');
+                        localStorage.setItem('showCoordinates', 'false');
+                    }
+                });
+            }
+
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initThemeSwitcher);
+                document.addEventListener('DOMContentLoaded', () => {
+                    initThemeSwitcher();
+                    initCoordinatesToggle();
+                });
             } else {
                 initThemeSwitcher();
+                initCoordinatesToggle();
             }
 
     document.addEventListener('visibilitychange', async() => {

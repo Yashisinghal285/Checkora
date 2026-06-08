@@ -13,6 +13,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from django.utils.http import (
     urlsafe_base64_encode,
     urlsafe_base64_decode
@@ -22,6 +23,7 @@ from django.utils.encoding import (
     force_bytes,
     force_str
 )
+from django.utils.text import slugify
 
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
@@ -47,9 +49,17 @@ from .models import (
     GameResult,
     PuzzleStats,
     LessonProgress,
+    Achievement,
+    UserAchievement,
+    FeaturedBadge,
 )
 logger = logging.getLogger(__name__)
-from game.services import cleanup_stale_games
+from game.services import (
+    cleanup_stale_games,
+    check_game_achievements,
+    check_puzzle_achievements,
+)
+
 from .analysis import build_summary
 
 def landing(request):
@@ -58,6 +68,10 @@ def landing(request):
 
 def preloader(request):
     return render(request, 'game/preloading.html')
+
+def disclaimer(request):
+    """Render the standalone platform disclaimer page."""
+    return render(request, 'game/disclaimer.html')
 
 @ensure_csrf_cookie
 def index(request):
@@ -82,7 +96,7 @@ def record_game_result(request, mode, winner, reason, player_color='white', move
             moves = game_data.get('move_history', [])
         else:
             moves = []
-    GameResult.objects.create(
+    result = GameResult.objects.create(
         user=user,
         mode=mode,
         winner=winner,
@@ -90,6 +104,11 @@ def record_game_result(request, mode, winner, reason, player_color='white', move
         player_color=player_color,
         moves=moves
     )
+    result.full_clean()
+    result.save()
+
+    if user:
+        check_game_achievements(user)
 
 
 @require_POST
@@ -591,6 +610,27 @@ def check_username(request):
     return JsonResponse({'available': not exists})
 
 
+REGISTRATION_SESSION_KEYS = (
+    'registration_user_id',
+    'registration_otp_hash',
+    'otp_created_at',
+    'registration_email',
+    'otp_failed_attempts',
+)
+
+
+def _clear_registration_session(request):
+    """Clear all registration-related keys from the session and cache."""
+    user_id = request.session.get('registration_user_id')
+    if user_id and user_id != -1:
+        cache.delete(f"otp_failed_attempts_user_{user_id}")
+    else:
+        cache.delete(f"otp_failed_attempts_session_{request.session.session_key}")
+
+    for key in REGISTRATION_SESSION_KEYS:
+        request.session.pop(key, None)
+
+
 def register_view(request):
     """Handle new user registration with OTP email verification."""
     if request.user.is_authenticated:
@@ -801,10 +841,7 @@ def register_view(request):
                     # This preserves existing inactive accounts for re-verification.
                     if is_new_user:
                         user.delete()
-                    request.session.pop('registration_user_id', None)
-                    request.session.pop('registration_otp_hash', None)
-                    request.session.pop('registration_email', None)
-                    request.session.pop('otp_created_at', None)
+                    _clear_registration_session(request)
                     err_msg = (
                         'Failed to send OTP email. '
                         'Please check your email address and try again.'
@@ -829,23 +866,46 @@ def verify_otp(request):
         messages.error(request, 'Session expired. Please register again.')
         return redirect('register')
 
+    if user_id and user_id != -1:
+        cache_key = f"otp_failed_attempts_user_{user_id}"
+    else:
+        if not request.session.session_key:
+            request.session.create()
+        cache_key = f"otp_failed_attempts_session_{request.session.session_key}"
+
     if request.method == 'POST':
+        # Check expiration first
         otp_created_at = request.session.get('otp_created_at')
+        if otp_created_at and time.time() - otp_created_at > 300:
+            messages.error(
+                request,
+                'OTP has expired. Please register again.',
+            )
+            # Retrieve attempts to preserve across expiration
+            cache_attempts = cache.get(cache_key, 0)
+            session_attempts = request.session.get('otp_failed_attempts', 0)
+            otp_failed_attempts = max(session_attempts, cache_attempts)
 
-        if otp_created_at:
-            if time.time() - otp_created_at > 300:
-                # Security: preserve the inactive account so the
-                # user can re-register without losing their username.
-                messages.error(
-                    request,
-                    'OTP has expired. Please register again.',
-                )
-                request.session.pop('registration_otp_hash', None)
-                request.session.pop('otp_created_at', None)
-                request.session.pop('registration_user_id', None)
-                request.session.pop('registration_email', None)
+            _clear_registration_session(request)
+            if otp_failed_attempts:
+                request.session['otp_failed_attempts'] = otp_failed_attempts
+                cache.set(cache_key, otp_failed_attempts, timeout=900)
 
-                return redirect('register')
+            return redirect('register')
+
+        # Atomic increment of attempts in cache using cache.add and cache.incr
+        session_attempts = request.session.get('otp_failed_attempts', 0)
+        if not cache.add(cache_key, session_attempts + 1, timeout=900):
+            otp_failed_attempts = cache.incr(cache_key)
+        else:
+            otp_failed_attempts = session_attempts + 1
+
+        request.session['otp_failed_attempts'] = otp_failed_attempts
+
+        if otp_failed_attempts > 5:
+            _clear_registration_session(request)
+            messages.error(request, 'Too many incorrect attempts. Please register again.')
+            return redirect('register')
 
         entered_otp = request.POST.get('otp', '').strip()
 
@@ -864,10 +924,7 @@ def verify_otp(request):
                 user.is_active = True
                 user.full_clean()
                 user.save()
-                del request.session['registration_user_id']
-                del request.session['registration_otp_hash']
-                request.session.pop('otp_created_at', None)
-                request.session.pop('registration_email', None)
+                _clear_registration_session(request)
 
                 try:
                     from django.template import TemplateDoesNotExist, TemplateSyntaxError
@@ -905,13 +962,15 @@ def verify_otp(request):
                     request,
                     'User not found. Please register again.'
                 )
-                request.session.pop('registration_otp_hash', None)
-                request.session.pop('otp_created_at', None)
-                request.session.pop('registration_user_id', None)
-                request.session.pop('registration_email', None)
+                _clear_registration_session(request)
                 return redirect('register')
 
         else:
+            if otp_failed_attempts >= 5:
+                _clear_registration_session(request)
+                messages.error(request, 'Too many incorrect attempts. Please register again.')
+                return redirect('register')
+
             messages.error(request, 'Invalid OTP. Please try again.')
 
     remaining_time = 0
@@ -1295,6 +1354,11 @@ def update_puzzle_stats(request):
     stats.daily_completions = data.get("daily_completions", 0)
 
     stats.save()
+    
+    check_puzzle_achievements(
+        request.user,
+        stats
+    )
 
     return JsonResponse({"success": True})
 
@@ -1451,6 +1515,8 @@ def confirm_delete_account(request, uidb64, token):
     )
 
     return redirect('landing')
+
+
 @csrf_exempt
 @require_POST
 def analyze_game_view(request):
@@ -1475,28 +1541,97 @@ def analyze_game_view(request):
         logger.error('Failed to analyze game: %s', e)
         return JsonResponse({'error': 'Failed to analyze game'}, status=400)
 
-def lessons_view(request):
-    lessons = {
-        "Beginner": [
+
+_LESSON_NAMES = (
+    "How Pieces Move",
+    "Check and Checkmate",
+    "Castling",
+    "Opening Principles",
+    "Forks",
+    "Pins",
+    "Skewers",
+    "Discovered Attacks",
+    "Pawn Structures",
+    "King Safety",
+    "Piece Activity",
+    "Basic Endgames",
+)
+
+LESSON_LEVELS = [
+    {
+        "id": 1,
+        "title": "Chess Fundamentals",
+        "lessons": [
             "How Pieces Move",
             "Check and Checkmate",
             "Castling",
             "Opening Principles",
         ],
-        "Intermediate": [
+    },
+    {
+        "id": 2,
+        "title": "Basic Tactics",
+        "lessons": [
             "Forks",
             "Pins",
             "Skewers",
             "Discovered Attacks",
         ],
-        "Advanced": [
+    },
+    {
+        "id": 3,
+        "title": "Advanced Concepts",
+        "lessons": [
             "Pawn Structures",
             "King Safety",
             "Piece Activity",
             "Basic Endgames",
         ],
-    }
+    },
+]
 
+def _lesson_name_from_slug(lesson_slug):
+    for name in _LESSON_NAMES:
+        if slugify(name) == lesson_slug:
+            return name
+    return None
+
+
+def _resolve_lesson_name(url_key):
+    if url_key in _LESSON_NAMES:
+        return url_key
+    return _lesson_name_from_slug(url_key)
+
+
+def get_unlocked_lessons(completed_lessons):
+    unlocked = set()
+
+    for level_index, level in enumerate(LESSON_LEVELS):
+        
+        lessons = level["lessons"]
+        
+        previous_level_complete = True
+
+        if level_index > 0:
+            previous_level = LESSON_LEVELS[level_index - 1]
+            previous_level_complete = all(
+                lesson in completed_lessons
+                for lesson in previous_level["lessons"]
+            )
+
+        if not previous_level_complete:
+            continue
+
+        for i, lesson in enumerate(lessons):
+            if i == 0:
+                unlocked.add(lesson)
+            elif lessons[i - 1] in completed_lessons:
+                unlocked.add(lesson)
+
+    return unlocked
+
+def lessons_view(request):
+    
     completed_lessons = []
 
     if request.user.is_authenticated:
@@ -1509,26 +1644,33 @@ def lessons_view(request):
                 flat=True
             )
         )
+        
     total_lessons = sum(
-        len(lesson_list)
-        for lesson_list in lessons.values()
+        len(level["lessons"])
+        for level in LESSON_LEVELS
     )
-
-    completed_count = len(completed_lessons)
+    
+    unlocked_lessons = get_unlocked_lessons(
+        completed_lessons
+    )
 
     return render(
         request,
         "game/lessons.html",
         {
-            "lessons": lessons,
+            "levels": LESSON_LEVELS,
+            "unlocked_lessons": unlocked_lessons,
             "completed_lessons": completed_lessons,
             "total_lessons": total_lessons,
-            "completed_count": completed_count
         }
     )
 
 
 def lesson_detail_view(request, lesson_name):
+    resolved_name = _resolve_lesson_name(lesson_name)
+    if resolved_name is not None:
+        lesson_name = resolved_name
+
     lesson_data = {
         "How Pieces Move": {
             "title": "How Pieces Move",
@@ -2031,19 +2173,20 @@ def lesson_detail_view(request, lesson_name):
                     ]
                 }
             ],
+            
             "lesson_steps": [
                 {
                     "instruction": "Advance the passed pawn from d5 to d6.",
                     "expected_move": "d5-d6"
                 }
             ],
-
+            
             "practice_position": {
                 "d5": "P",
                 "e1": "K"
             },
         },
-
+        
         "King Safety": {
             "title": "King Safety",
             "description": "Keep your king protected throughout the game.",
@@ -2270,6 +2413,12 @@ def lesson_detail_view(request, lesson_name):
 @login_required
 @require_POST
 def complete_lesson(request, lesson_name):
+    resolved_name = _resolve_lesson_name(lesson_name)
+    if resolved_name is not None:
+        lesson_name = resolved_name
+
+    if lesson_name not in _LESSON_NAMES:
+        raise Http404("Lesson not found")
 
     LessonProgress.objects.update_or_create(
         user=request.user,
@@ -2282,6 +2431,122 @@ def complete_lesson(request, lesson_name):
 
     return redirect(
         "lesson_detail",
-        lesson_name=lesson_name
+        lesson_name=slugify(lesson_name)
     )
- 
+
+
+def lesson_map_view(request):
+
+    completed_lessons = []
+
+    if request.user.is_authenticated:
+        completed_lessons = list(
+            LessonProgress.objects.filter(
+                user=request.user,
+                completed=True
+            ).values_list(
+                "lesson_name",
+                flat=True
+            )
+        )
+
+    unlocked_lessons = get_unlocked_lessons(
+        completed_lessons
+    )
+
+    return render(
+        request,
+        "game/lesson_map.html",
+        {
+            "levels": LESSON_LEVELS,
+            "completed_lessons": completed_lessons,
+            "unlocked_lessons": unlocked_lessons,
+        }
+    )
+
+
+@login_required
+def achievements_view(request):
+    achievements = Achievement.objects.all().order_by(
+        "category",
+        "title"
+    )
+
+    unlocked = set(
+        UserAchievement.objects.filter(
+            user=request.user
+        ).values_list(
+            "achievement_id",
+            flat=True
+        )
+    )
+
+    featured_badges = FeaturedBadge.objects.filter(
+        user=request.user
+    ).select_related("achievement")
+
+    return render(
+        request,
+        "game/achievements.html",
+        {
+            "achievements": achievements,
+            "unlocked": unlocked,
+            "featured_badges": featured_badges,
+        }
+    )
+
+
+@login_required
+def feature_badge(request, achievement_id):
+    achievement = get_object_or_404(
+        Achievement,
+        id=achievement_id
+    )
+
+    # Only unlocked badges can be featured
+    if not UserAchievement.objects.filter(
+        user=request.user,
+        achievement=achievement
+    ).exists():
+        messages.error(
+            request,
+            "You can only feature unlocked badges."
+        )
+        return redirect("achievements")
+
+    # Maximum 3 featured badges
+    if FeaturedBadge.objects.filter(
+        user=request.user
+    ).count() >= 3:
+        messages.error(
+            request,
+            "You can only feature up to 3 badges."
+        )
+        return redirect("achievements")
+
+    FeaturedBadge.objects.get_or_create(
+        user=request.user,
+        achievement=achievement
+    )
+
+    messages.success(
+        request,
+        "Badge featured successfully."
+    )
+
+    return redirect("achievements")
+
+
+@login_required
+def remove_featured_badge(request, badge_id):
+    FeaturedBadge.objects.filter(
+        id=badge_id,
+        user=request.user
+    ).delete()
+
+    messages.success(
+        request,
+        "Featured badge removed."
+    )
+
+    return redirect("achievements")
