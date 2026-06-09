@@ -58,7 +58,10 @@ from game.services import (
     cleanup_stale_games,
     check_game_achievements,
     check_puzzle_achievements,
+    generate_badge,
 )
+
+from django.http import FileResponse
 
 from .analysis import build_summary
 
@@ -2550,3 +2553,22 @@ def remove_featured_badge(request, badge_id):
     )
 
     return redirect("achievements")
+
+
+@login_required
+def download_badge(request, achievement_id):
+    user_achievement = get_object_or_404(
+        UserAchievement,
+        user=request.user,
+        achievement_id=achievement_id
+    )
+
+    badge_path = generate_badge(
+        user_achievement
+    )
+
+    return FileResponse(
+        open(badge_path, "rb"),
+        as_attachment=True,
+        filename=f"{user_achievement.achievement.title}.png"
+    )

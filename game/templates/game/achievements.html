@@ -172,6 +172,22 @@
             cursor: pointer;
         }
 
+        .download-btn {
+            display: inline-block;
+            margin-top: 12px;
+            margin-right: 10px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: #2ecc71;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .download-btn:hover {
+            opacity: 0.9;
+        }
+
     </style>
 </head>
 <body>
@@ -238,7 +254,6 @@
         <div class="rarity rarity-{{ achievement.rarity }}">
             {{ achievement.get_rarity_display }}
         </div>
-        </div>
 
         <div class="description">
             {{ achievement.description }}
@@ -248,6 +263,13 @@
             <span class="status unlocked">
                 ✅ Unlocked
             </span>
+
+            <a
+                href="{% url 'download_badge' achievement.id %}"
+                class="download-btn"
+            >
+                ⬇ Download Badge
+            </a>
             
             <form method="post"
                 action="{% url 'feature_badge' achievement.id %}">
