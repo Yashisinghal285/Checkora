@@ -5,6 +5,7 @@ import time
 import hashlib
 import secrets
 import secrets as secrets_module
+from django.http import HttpResponseServerError
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.conf import settings
 from django.http import Http404, JsonResponse
@@ -2562,18 +2563,31 @@ def download_badge(request, achievement_id):
         user=request.user,
         achievement_id=achievement_id
     )
+    try:
+        badge_path = generate_badge(
+            user_achievement
+        )
 
-    badge_path = generate_badge(
-        user_achievement
-    )
-    
-    safe_filename = (
-        slugify(user_achievement.achievement.title)
-        or f"badge_{achievement_id}"
-    )
+        safe_filename = (
+            slugify(user_achievement.achievement.title)
+            or f"badge_{achievement_id}"
+        )
 
-    return FileResponse(
-        badge_path.open("rb"),
-        as_attachment=True,
-        filename=f"{safe_filename}.png"
-    )
+        return FileResponse(
+            badge_path.open("rb"),
+            as_attachment=True,
+            filename=f"{safe_filename}.png"
+        )
+    except (
+        FileNotFoundError,
+        OSError,
+    ) as exc:
+        logger.error(
+            "Badge generation failed for achievement %s: %s",
+            achievement_id,
+            exc
+        )
+
+        return HttpResponseServerError(
+            "Badge generation failed."
+        )
