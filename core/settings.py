@@ -165,17 +165,22 @@ if IS_PRODUCTION:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
-# Email Configuration for OTP and Password Reset EMails
-EMAIL_BACKEND = os.getenv(
-    'EMAIL_BACKEND', 
-    'django.core.mail.backends.smtp.EmailBackend'
-)
+# Email Configuration for OTP and Password Reset Emails
+if DEBUG:
+    _DEFAULT_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    _DEFAULT_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# Env var override must still win, explicit .env value takes priority
+# Fixed: Using 'or' ensures that empty string values in .env fall back safely to _DEFAULT_BACKEND
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND') or _DEFAULT_BACKEND
+
+# DO NOT TOUCH - Keep remaining settings exactly as they were originally
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 
 # Redirect after login

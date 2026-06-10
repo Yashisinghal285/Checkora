@@ -119,6 +119,11 @@
             <a href="/play/"> Dashboard </a>
 
             <a href="/stats/"> Stats </a>
+
+            <a href="{% url 'leaderboard' %}"> Leaderboard </a>
+
+            <a href="{% url 'achievements' %}"> Achievements </a>
+
             <a
               href="{% url 'delete_account' %}"
               class="delete-option"
@@ -534,6 +539,8 @@
           <h4>Platform</h4>
           <ul class="footer-nav-list">
             <li><a href="{% url 'index' %}" class="footer-link">Play Game</a></li>
+            <li><a href="{% url 'leaderboard' %}" class="footer-link">Leaderboard</a></li>
+            <li><a href="{% url 'achievements' %}" class="footer-link">Achievements</a></li>
             <li><a href="{% url 'stats' %}" class="footer-link">Statistics</a></li>
             <li><a href="{% url 'rules' %}" class="footer-link">Rulebook</a></li>
             <li><a href="{% url 'lessons' %}" class="footer-link">Lessons</a></li>

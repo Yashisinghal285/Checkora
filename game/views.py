@@ -5,6 +5,7 @@ import time
 import hashlib
 import secrets
 import secrets as secrets_module
+from django.http import HttpResponseServerError
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.conf import settings
 from django.http import Http404, JsonResponse
@@ -24,7 +25,7 @@ from django.utils.encoding import (
     force_str
 )
 from django.utils.text import slugify
-
+from .progression import award_xp
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.views import PasswordResetView
@@ -52,13 +53,17 @@ from .models import (
     Achievement,
     UserAchievement,
     FeaturedBadge,
+    UserProgress,
 )
 logger = logging.getLogger(__name__)
 from game.services import (
     cleanup_stale_games,
     check_game_achievements,
     check_puzzle_achievements,
+    generate_badge,
 )
+
+from django.http import FileResponse
 
 from .analysis import build_summary
 
@@ -1293,6 +1298,9 @@ def stats_view(request):
     ).exclude(mode__in=['', None])
 
     recent = user_results.order_by('-played_at')[:20]
+    progress, _ = UserProgress.objects.get_or_create(
+        user=request.user
+    )
     ai_results = user_results.filter(mode='ai')
 
     # If winner == player_color, the user won
@@ -1316,6 +1324,7 @@ def stats_view(request):
         'ai_wins': ai_wins,
         'ai_draws': ai_draws,
         'win_percentage': round(win_percentage, 2),
+        'progress': progress,
     })
 
 @login_required
@@ -1350,7 +1359,7 @@ def update_puzzle_stats(request):
     stats.daily_completions = data.get("daily_completions", 0)
 
     stats.save()
-    
+
     check_puzzle_achievements(
         request.user,
         stats
@@ -2416,6 +2425,12 @@ def complete_lesson(request, lesson_name):
     if lesson_name not in _LESSON_NAMES:
         raise Http404("Lesson not found")
 
+    already_completed = LessonProgress.objects.filter(
+        user=request.user,
+        lesson_name=lesson_name,
+        completed=True
+    ).exists()
+
     LessonProgress.objects.update_or_create(
         user=request.user,
         lesson_name=lesson_name,
@@ -2425,6 +2440,12 @@ def complete_lesson(request, lesson_name):
         }
     )
 
+    if not already_completed:
+        award_xp(
+            request.user,
+            25
+        )
+    
     return redirect(
         "lesson_detail",
         lesson_name=slugify(lesson_name)
@@ -2546,3 +2567,39 @@ def remove_featured_badge(request, badge_id):
     )
 
     return redirect("achievements")
+
+
+@login_required
+def download_badge(request, achievement_id):
+    user_achievement = get_object_or_404(
+        UserAchievement,
+        user=request.user,
+        achievement_id=achievement_id
+    )
+    try:
+        badge_path = generate_badge(
+            user_achievement
+        )
+
+        safe_filename = (
+            slugify(user_achievement.achievement.title)
+            or f"badge_{achievement_id}"
+        )
+
+        return FileResponse(
+            badge_path.open("rb"),
+            as_attachment=True,
+            filename=f"{safe_filename}.png"
+        )
+    except (
+        FileNotFoundError,
+        OSError,
+    ):
+        logger.error(
+            "Badge generation failed for achievement %s: %s",
+            achievement_id,
+        )
+
+        return HttpResponseServerError(
+            "Badge generation failed."
+        )

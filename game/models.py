@@ -70,7 +70,35 @@ class PuzzleStats(models.Model):
 
     def __str__(self):
         return f"{self.user.username} Puzzle Stats"
-    
+
+
+class UserProgress(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="progress"
+    )
+
+    xp = models.PositiveIntegerField(
+        default=0,
+        db_index=True
+    )
+
+    level = models.PositiveIntegerField(
+        default=1,
+        db_index=True
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.user.username} "
+            f"(Level {self.level}, XP {self.xp})"
+        )
+        
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
 class LessonProgress(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -48,6 +48,7 @@ urlpatterns = [
     
     # Badges & Achievements
     path("achievements/", views.achievements_view, name="achievements"),
+    path("achievement/<int:achievement_id>/download/", views.download_badge, name="download_badge",),
     path("feature-badge/<int:achievement_id>/", views.feature_badge, name="feature_badge"),
     path("remove-featured-badge/<int:badge_id>/", views.remove_featured_badge, name="remove_featured_badge"),
 ]

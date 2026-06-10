@@ -1246,7 +1246,7 @@ class StatsCleanupTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'No games played yet.')
         # Summary cards should show 0 (now 4 cards)
-        self.assertContains(response, '<div class="num">0</div>', count=4)
+        self.assertContains(response, '<div class="num">0</div>', count=5)
         # No <tr> should be present in the tbody
         self.assertNotContains(response, '<tr><td>')
 
