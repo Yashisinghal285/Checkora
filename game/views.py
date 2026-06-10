@@ -1107,7 +1107,16 @@ class CustomPasswordResetView(PasswordResetView):
         return f'{ip_key}:expires'
 
     def _client_ip(self, request):
-        return get_client_ip(request)
+        remote_addr = request.META.get('REMOTE_ADDR', '')
+        trusted_ips = getattr(settings, 'TRUSTED_PROXY_IPS', [])
+        is_production = getattr(settings, 'IS_PRODUCTION', False)
+        if remote_addr in trusted_ips or is_production:
+            forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+            if forwarded_for:
+                parts = [p.strip() for p in forwarded_for.split(',') if p.strip()]
+                if parts:
+                    return parts[0]
+        return remote_addr
 
     def _format_duration(self, seconds):
         seconds = max(1, int(seconds))

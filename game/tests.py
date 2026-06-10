@@ -367,6 +367,24 @@ class PasswordResetRateLimitTest(TestCase):
         self.assertNotContains(response, '15 minute(s)')
         self.assertEqual(len(mail.outbox), 0)
 
+    @override_settings(TRUSTED_PROXY_IPS=[], IS_PRODUCTION=False)
+    def test_client_ip_untrusted_proxy_ignored(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '127.0.0.1')
+
+    @override_settings(TRUSTED_PROXY_IPS=['127.0.0.1'], IS_PRODUCTION=False)
+    def test_client_ip_trusted_proxy_used(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '203.0.113.195')
+
+    @override_settings(TRUSTED_PROXY_IPS=[], IS_PRODUCTION=True)
+    def test_client_ip_production_always_trusts_proxy(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '203.0.113.195')
+
 
 class MoveValidationTest(TestCase):
     """Test move validation wrapper by mocking validate_move."""
