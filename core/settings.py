@@ -20,7 +20,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / '.env')
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -44,7 +43,6 @@ extra_hosts = [host.strip() for host in os.environ.get('ALLOWED_HOSTS_EXTRA', ''
 if '*' in extra_hosts:
     raise ImproperlyConfigured("ALLOWED_HOSTS_EXTRA must not contain '*'")
 ALLOWED_HOSTS.extend(extra_hosts)
-
 
 # Application definition
 
@@ -91,10 +89,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
 
 DATABASES = {
     'default': dj_database_url.config(
