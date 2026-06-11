@@ -367,6 +367,40 @@ class PasswordResetRateLimitTest(TestCase):
         self.assertNotContains(response, '15 minute(s)')
         self.assertEqual(len(mail.outbox), 0)
 
+    @override_settings(TRUSTED_PROXY_IPS=[], IS_PRODUCTION=False)
+    def test_client_ip_untrusted_proxy_ignored(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '127.0.0.1')
+
+    @override_settings(TRUSTED_PROXY_IPS=['127.0.0.1'], IS_PRODUCTION=False)
+    def test_client_ip_trusted_proxy_used(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '203.0.113.195')
+
+    @override_settings(TRUSTED_PROXY_IPS=['10.0.0.1'], IS_PRODUCTION=True)
+    def test_client_ip_production_untrusted_proxy_ignored(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '127.0.0.1')
+
+    @override_settings(TRUSTED_PROXY_IPS=['127.0.0.1'], IS_PRODUCTION=True)
+    def test_client_ip_production_trusted_proxy_used(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(self.reset_url, HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(view._client_ip(request), '203.0.113.195')
+
+    @override_settings(TRUSTED_PROXY_IPS=['127.0.0.1'], IS_PRODUCTION=True)
+    def test_client_ip_uses_rightmost_untrusted_hop(self):
+        view = CustomPasswordResetView()
+        request = RequestFactory().post(
+            self.reset_url,
+            HTTP_X_FORWARDED_FOR='198.51.100.77, 203.0.113.195',
+            REMOTE_ADDR='127.0.0.1',
+        )
+        self.assertEqual(view._client_ip(request), '203.0.113.195')
+
 
 class MoveValidationTest(TestCase):
     """Test move validation wrapper by mocking validate_move."""
@@ -1028,7 +1062,6 @@ class AIMoveTest(TestCase):
             '/api/new-game/', data=json.dumps({'mode': 'ai'}),
             content_type='application/json'
         )
-
         r = self.client.post('/api/ai-move/', content_type='application/json')
         data = r.json()
         self.assertTrue(data['valid'])
@@ -1042,10 +1075,8 @@ class AIMoveTest(TestCase):
 
 class OpeningBookTest(SimpleTestCase):
     """Unit tests for the opening-book integration in ChessGame."""
-
-    # ------------------------------------------------------------------
+    
     # FEN key generation
-    # ------------------------------------------------------------------
 
     def test_fen_key_starting_position(self):
         """Starting position must produce the correct standard FEN key."""
@@ -1080,9 +1111,7 @@ class OpeningBookTest(SimpleTestCase):
         # Ranks 3-6 (0-indexed 2-5) are empty at start → four '8' segments
         self.assertIn('/8/', key)
 
-    # ------------------------------------------------------------------
     # Book loading
-    # ------------------------------------------------------------------
 
     def test_book_loads_from_json_file(self):
         """The book file must be loadable and return a non-empty dict."""
@@ -1111,9 +1140,7 @@ class OpeningBookTest(SimpleTestCase):
         # Restore so other tests use the real book
         ChessGame._opening_book = None
 
-    # ------------------------------------------------------------------
     # get_opening_book_move
-    # ------------------------------------------------------------------
 
     def test_starting_position_returns_book_move(self):
         """At the start of the game a valid book move should be returned."""
@@ -1228,9 +1255,7 @@ class OpeningBookTest(SimpleTestCase):
             'Book should produce variety across 60 calls')
         ChessGame._opening_book = None
 
-    # ------------------------------------------------------------------
     # Integration: get_ai_move uses book on first move
-    # ------------------------------------------------------------------
 
     def test_get_ai_move_uses_book_before_engine(self):
         """get_ai_move() must use the book first."""
