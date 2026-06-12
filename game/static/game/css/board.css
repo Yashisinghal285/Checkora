@@ -1895,6 +1895,19 @@ body {
         min-width: 0;
         width: 100%;
     }
+    .m-fab {
+        top: auto;
+        bottom: 16px;
+        right: 12px;
+
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    .m-fab-btn {
+        width: 40px;
+        height: 40px;
+    }
 }
 
 /* ================= CELEBRATION EFFECTS ================= */
