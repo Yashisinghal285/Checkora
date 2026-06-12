@@ -137,6 +137,14 @@ g++ -O2 game/engine/main.cpp -o game/engine/main.exe
 g++ -O2 game/engine/main.cpp -o game/engine/main
 ```
 
+## Development Documentation
+
+For detailed local development setup, environment configuration, common development commands, troubleshooting, and contributor workflow guidance, see:
+
+- [Local Development Setup Guide](docs/development.md)
+
+This guide expands on the Quick Start instructions and provides a complete development workflow for contributors.
+
 ## Project Structure
 
 Checkora follows a modular project structure to separate the frontend, backend, engine logic, and documentation clearly.
