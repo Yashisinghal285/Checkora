@@ -229,6 +229,47 @@ Checkora/
 └── vercel.json                    # Configuration for serverless Django routing on Vercel
 ```
 
+## Contributor Quick Reference
+
+| Looking For        | Location                        |
+| ------------------ | ------------------------------- |
+| API Endpoints      | `game/views.py`, `game/urls.py` |
+| Frontend Templates | `game/templates/`               |
+| CSS Files          | `game/static/game/css/`         |
+| JavaScript Files   | `game/static/game/js/`          |
+| Images & Sounds    | `game/static/game/`             |
+| Chess Engine       | `game/engine/`                  |
+| Database Models    | `game/models.py`                |
+| Forms              | `game/forms.py`                 |
+| Business Logic     | `game/services.py`              |
+| Unit Tests         | `game/tests.py`                 |
+| Selenium Tests     | `game/selenium_tests/`          |
+| Documentation      | `docs/`                         |
+| Django Settings    | `core/settings.py`              |
+| Root Routing       | `core/urls.py`                  |
+
+## Directory Overview
+
+### `core/`
+
+Contains Django project configuration including settings, root URL routing, and WSGI/ASGI entry points.
+
+### `game/`
+
+Main application module containing gameplay logic, API endpoints, templates, static assets, models, forms, and tests.
+
+### `game/engine/`
+
+Contains the chess engine implementations, including the high-performance C++ engine and Python fallback engine.
+
+### `docs/`
+
+Project documentation covering APIs, architecture, security reviews, and contributor resources.
+
+### `.github/`
+
+Repository workflows, issue templates, pull request templates, and automation configuration.
+
 ## Architecture
 
 Checkora uses a clean three-layer architecture:
