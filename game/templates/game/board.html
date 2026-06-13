@@ -73,13 +73,28 @@
 
     <!-- MOBILE FAB -->
 <div class="m-fab" id="mFab">
-  <button class="m-fab-btn" title="Pause"
-    onclick="document.getElementById('pauseBtn').click()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="5" y="3" width="4" height="18" rx="1.5"/>
-      <rect x="15" y="3" width="4" height="18" rx="1.5"/>
-    </svg>
-  </button>
+  <button
+  type="button"
+  class="m-fab-btn"
+  id="pauseFab"
+  title="Pause"
+  onclick="document.getElementById('pauseBtn').click()">
+
+  <svg id="pauseFabIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="5" y="3" width="4" height="18" rx="1.5"/>
+    <rect x="15" y="3" width="4" height="18" rx="1.5"/>
+  </svg>
+
+  <svg id="playFabIcon"
+       width="16"
+       height="16"
+       viewBox="0 0 24 24"
+       fill="currentColor"
+       style="display:none;">
+    <path d="M8 5v14l11-7z"/>
+  </svg>
+
+</button>
   <button class="m-fab-btn m-fab-resign" title="Resign"
     onclick="document.getElementById('resignBtn').click()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -798,6 +813,12 @@
                 <button type="button" id="copyLinkBtn" class="btn btn-gold" style="padding:10px; flex:1;">🔗 Copy Link</button>
             </div>
             <button type="button" id="whatsappBtn" style="padding:10px; border-radius:8px; background:#25D366; color:#fff; border:none; font-size:0.95rem; cursor:pointer; font-weight:bold;">💬 Share on WhatsApp</button>
+            <button type="button" id="twitterBtn" style="padding:10px; border-radius:8px; background:#1DA1F2; color:#fff; border:none; font-size:0.95rem; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle;">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                Share on X (Twitter)
+            </button>
             <button type="button" id="closeShareBtn" class="btn" style="padding:10px; background:#333; color:#fff;">Close</button>
         </div>
     </div>
@@ -861,6 +882,11 @@ ${message}
     document.getElementById('whatsappBtn').onclick = function () {
         const encoded = encodeURIComponent(shareText);
         window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+    };
+
+    document.getElementById('twitterBtn').onclick = function () {
+        const encoded = encodeURIComponent(shareText);
+        window.open(`https://twitter.com/intent/tweet?text=${encoded}`, '_blank', 'noopener,noreferrer');
     };
 
     document.getElementById('closeShareBtn').onclick = function () {

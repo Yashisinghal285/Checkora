@@ -57,6 +57,7 @@ Join our Discord community for updates, support, and games: https://discord.gg/D
 - [Contributors](#contributors)
 - [Features](#features)
 - [Quick Start](#quick-start)
+- [Testing Guide](#testing-guide)
 - [Project Structure](#project-structure)
 - [Architecture](#architecture)
 - [API Reference](#api-reference)
@@ -144,6 +145,19 @@ For detailed local development setup, environment configuration, common developm
 - [Local Development Setup Guide](docs/development.md)
 
 This guide expands on the Quick Start instructions and provides a complete development workflow for contributors.
+
+## Testing Guide
+
+For detailed testing instructions, see:
+
+- [Testing & QA Guide](docs/testing.md)
+
+This guide covers:
+
+- Running unit tests
+- Running Selenium tests
+- Debugging test failures
+- Contributor testing best practices
 
 ## Project Structure
 
