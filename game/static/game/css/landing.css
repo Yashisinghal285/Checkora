@@ -2036,7 +2036,7 @@ body {
 
 .lessons-divider {
   width: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--card-border);
   flex-shrink: 0;
   align-self: stretch;
 }
@@ -2050,6 +2050,11 @@ body {
 }
 
 @media (max-width: 640px) {
+  .bento-card.bento-full {
+    grid-row: span 2;
+    height: auto;
+  }
+
   .lessons-inner {
     flex-direction: column;
     height: auto;
