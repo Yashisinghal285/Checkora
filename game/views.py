@@ -3492,7 +3492,12 @@ def forum_list(request):
 
 def forum_detail(request, discussion_id):
     discussion = get_object_or_404(Discussion, id=discussion_id)
-    replies = discussion.replies.select_related("user")
+
+    replies = (
+        discussion.replies
+        .select_related("user", "reply_to", "reply_to__user")
+    )
+
     form = ReplyForm()
 
     return render(
@@ -3533,10 +3538,21 @@ def forum_reply(request, discussion_id):
     discussion = get_object_or_404(Discussion, id=discussion_id)
     form = ReplyForm(request.POST)
 
+    reply_to_id = request.POST.get("reply_to")
+    parent_reply = None
+
+    if reply_to_id:
+        parent_reply = Reply.objects.filter(
+            id=reply_to_id,
+            discussion=discussion,
+            is_deleted=False
+        ).first()
+
     if form.is_valid():
         reply = form.save(commit=False)
         reply.discussion = discussion
         reply.user = request.user
+        reply.reply_to = parent_reply
         reply.save()
 
         messages.success(request, "Reply posted successfully.")
@@ -3544,3 +3560,44 @@ def forum_reply(request, discussion_id):
         messages.error(request, "Reply could not be posted.")
 
     return redirect("forum_detail", discussion_id=discussion.id)
+
+@login_required
+@require_POST
+def forum_reply_edit(request, reply_id):
+    reply = get_object_or_404(
+        Reply,
+        id=reply_id,
+        user=request.user,
+        is_deleted=False
+    )
+
+    content = request.POST.get("content", "").strip()
+
+    if len(content) < 2:
+        messages.error(request, "Reply cannot be empty.")
+        return redirect("forum_detail", discussion_id=reply.discussion.id)
+
+    reply.content = content
+    reply.is_edited = True
+    reply.save(update_fields=["content", "is_edited", "updated_at"])
+
+    messages.success(request, "Reply updated successfully.")
+    return redirect("forum_detail", discussion_id=reply.discussion.id)
+
+
+@login_required
+@require_POST
+def forum_reply_delete(request, reply_id):
+    reply = get_object_or_404(
+        Reply,
+        id=reply_id,
+        user=request.user,
+        is_deleted=False
+    )
+
+    reply.content = ""
+    reply.is_deleted = True
+    reply.save(update_fields=["content", "is_deleted", "updated_at"])
+
+    messages.success(request, "Reply deleted successfully.")
+    return redirect("forum_detail", discussion_id=reply.discussion.id)
