@@ -91,6 +91,7 @@ def cleanup_stale_games():
 # ==========================
 
 def unlock_achievement(user, code):
+    """Unlock an achievement for a user."""
     if not user:
         return
 
@@ -107,6 +108,7 @@ def unlock_achievement(user, code):
 
 
 def check_game_achievements(user):
+    """Check and award achievements based on game statistics."""
     if not user:
         return
 
@@ -201,6 +203,7 @@ def check_game_achievements(user):
 
 
 def check_puzzle_achievements(user, stats):
+    """Check and award achievements based on puzzle progress."""
     if not user:
         return
 
