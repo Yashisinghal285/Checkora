@@ -116,11 +116,14 @@ class ChessGame:
             result = '1-0' if self.current_turn == 'black' else '0-1'
 
         pgn_moves = []
+        
+        def _fix_castling(move):
+            return move.replace('0-0-0', 'O-O-O').replace('0-0', 'O-O')
         for i in range(0, len(self.move_history), 2):
             move_number = i // 2 + 1
-            white_move = self.move_history[i]['notation']
+            white_move = _fix_castling(self.move_history[i]['notation'])
             if i + 1 < len(self.move_history):
-                black_move = self.move_history[i + 1]['notation']
+                black_move = _fix_castling(self.move_history[i + 1]['notation'])
                 pgn_moves.append(f"{move_number}. {white_move} {black_move}")
             else:
                 pgn_moves.append(f"{move_number}. {white_move}")
@@ -134,7 +137,7 @@ class ChessGame:
             f'[Result "{result}"]',
         ]
         moves = " ".join(pgn_moves)
-        return "\n".join(headers) + "\n\n" + moves
+        return "\n".join(headers) + "\n\n" + moves + " " + result
 
     def to_dict(self):
         """Serialise state for Django session storage.
@@ -576,10 +579,12 @@ DP cache is intentionally excluded to save cookie space."""
         # Check for checkmate / stalemate / check
         game_status = self.check_game_status()
         if game_status == 'checkmate':
-            notation += '#'
+            if not notation.endswith('#'):
+                notation += '#'
 
         elif game_status == 'check':
-            notation += '+'
+            if not notation.endswith('+') and not notation.endswith('#'):
+                notation += '+'
         self.move_history.append({
             'notation': notation,
             'piece': piece,

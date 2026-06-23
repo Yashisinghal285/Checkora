@@ -190,182 +190,192 @@
                 <div class="label">🏆 Level</div>
             </div>
 
-            <div class="card">
-                <div class="num">{{ progress.xp }}</div>
-                <div class="label">⚡ XP</div>
-            </div>
+    <div style="text-align:center; margin-top:20px; margin-bottom:20px;">
+        <a href="{% url 'achievements' %}"
+            style="
+                background:#f0c040;
+                color:#0f0f1a;
+                padding:12px 20px;
+                border-radius:8px;
+                font-weight:bold;
+                text-decoration:none;
+                display:inline-block;
+            ">
+            🏆 View Achievements
+        </a>
+    </div>
 
-            <div class="card">
-                <div class="num">{{ rating.rating }}</div>
-                <div class="label">♟ Chess Rating</div>
-            </div>
+    <h2>Advanced Performance Metrics</h2>
 
-            <div class="card">
-                <div class="num">
-                    {% if rating.rating < 1000 %}
-                        Beginner
-                    {% elif rating.rating < 1400 %}
-                        Intermediate
-                    {% elif rating.rating < 1800 %}
-                        Advanced
+    <div class="summary">
+        <div class="card">
+            <div class="num">{{ total_games }}</div>
+            <div class="label">Total Games</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ total_wins }}</div>
+            <div class="label">Wins</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ total_losses }}</div>
+            <div class="label">Losses</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ total_draws }}</div>
+            <div class="label">Draws</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ overall_win_rate }}%</div>
+            <div class="label">Win Rate</div>
+        </div>
+    </div>
+
+    <h2>Color Statistics</h2>
+
+    <div class="summary">
+        <div class="card">
+            <div class="num">{{ games_as_white }}</div>
+            <div class="label">Games as White</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ games_as_black }}</div>
+            <div class="label">Games as Black</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ white_win_rate }}%</div>
+            <div class="label">White Win Rate</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ black_win_rate }}%</div>
+            <div class="label">Black Win Rate</div>
+        </div>
+    </div>
+
+    <h2>Activity Statistics</h2>
+
+    <div class="summary">
+
+        <div class="card">
+            <div class="num">{{ games_this_week }}</div>
+            <div class="label">Games This Week</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ games_this_month }}</div>
+            <div class="label">Games This Month</div>
+        </div>
+
+    </div>
+
+    <h2>Recent Games</h2>
+    {% if recent %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Mode</th>
+                    <th>Winner</th>
+                    <th>End Reason</th>
+                    <th>Played At</th>
+                    <th>Replay</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in recent %}
+                <tr>
+                    <td>{{ result.get_mode_display }}</td>
+                    <td>
+                    {% if result.winner == 'draw' %}
+                        Draw
+                    {% elif result.mode == 'ai' %}
+                        {% if result.winner == result.player_color %}
+                            {{ request.user.username }} ({{ result.winner|title }})
+                        {% else %}
+                            AI ({{ result.winner|title }})
+                        {% endif %}
                     {% else %}
-                        Expert
+                        {% if result.winner == 'white' %}
+                            {% if result.replay_record %}{{ result.replay_record.white_label }}{% else %}White{% endif %} (White)
+                        {% elif result.winner == 'black' %}
+                            {% if result.replay_record %}{{ result.replay_record.black_label }}{% else %}Black{% endif %} (Black)
+                        {% endif %}
                     {% endif %}
-                </div>
-                <div class="label">🏅 Rank Tier</div>
-            </div>
-        </div>
-
-        <div style="text-align:center; margin-top:30px; margin-bottom:30px;">
-            <a href="{% url 'achievements' %}" class="btn">🏆 View Achievements</a>
-        </div>
-
-        <h2>Advanced Performance Metrics</h2>
-        <div class="summary">
-            <div class="card">
-                <div class="num">{{ total_games }}</div>
-                <div class="label">Total Games</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ total_wins }}</div>
-                <div class="label">Wins</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ total_losses }}</div>
-                <div class="label">Losses</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ total_draws }}</div>
-                <div class="label">Draws</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ overall_win_rate }}%</div>
-                <div class="label">Win Rate</div>
-            </div>
-        </div>
-
-        <h2>Color Statistics</h2>
-        <div class="summary">
-            <div class="card">
-                <div class="num">{{ games_as_white }}</div>
-                <div class="label">Games as White</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ games_as_black }}</div>
-                <div class="label">Games as Black</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ white_win_rate }}%</div>
-                <div class="label">White Win Rate</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ black_win_rate }}%</div>
-                <div class="label">Black Win Rate</div>
-            </div>
-        </div>
-
-        <h2>Activity Statistics</h2>
-        <div class="summary">
-            <div class="card">
-                <div class="num">{{ games_this_week }}</div>
-                <div class="label">Games This Week</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ games_this_month }}</div>
-                <div class="label">Games This Month</div>
-            </div>
-        </div>
-
-        <h2>Recent Match Records</h2>
-        {% if recent %}
-        <div style="overflow-x: auto; margin-top: 20px;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Mode</th>
-                        <th>Winner</th>
-                        <th>End Reason</th>
-                        <th>Played At</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for result in recent %}
-                    <tr>
-                        <td style="font-weight: 600;">{{ result.get_mode_display }}</td>
-                        <td>
-                            {% if result.winner == 'draw' %}
-                            <span style="color: #94a3b8;">Draw</span>
-                            {% else %}
-                            <span style="color: #facc15; font-weight: 600;">{{ result.get_winner_display }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ result.get_end_reason_display }}</td>
-                        <td style="color: #64748b;">{{ result.played_at|date:"Y-m-d H:i" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <span class="empty-state-icon">♟️</span>
-            <h3>No Match Records Found</h3>
-            <p>You haven't played any games on Checkora yet. Battle the hybrid minimax AI or play with a friend to initialize your statistics!</p>
-            <a href="{% url 'index' %}" class="btn">Play vs AI Chess</a>
-        </div>
-        {% endif %}
-
-        <h2>Learning Progress</h2>
-        <div class="summary">
-            <div class="card">
-                <div class="num">{{ lessons_completed }}</div>
-                <div class="label">Lessons Completed</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ lesson_completion_percentage }}%</div>
-                <div class="label">Lesson Completion</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ progress.level }}</div>
-                <div class="label">Current Level</div>
-            </div>
-        </div>
-
-        <h2>Rating Analytics</h2>
-        <div class="summary">
-            <div class="card">
-                <div class="num">{{ highest_rating }}</div>
-                <div class="label">Highest Rating</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ lowest_rating }}</div>
-                <div class="label">Lowest Rating</div>
-            </div>
-
-            <div class="card">
-                <div class="num">{{ average_rating }}</div>
-                <div class="label">Average Rating</div>
-            </div>
-
-            <div class="card">
-                <div class="num">
-                    {% if total_rating_change > 0 %}
-                        +{{ total_rating_change }}
-                    {% else %}
-                        {{ total_rating_change }}
+                    </td>
+                    <td>{{ result.get_end_reason_display }}</td>
+                    <td>{{ result.played_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                    {% if result.replay_record and not result.replay_record.is_expired %}
+                    <a href="{% url 'match_history' %}?game={{ result.replay_record.id }}" class="btn btn-gold" style="padding: 4px 12px; font-size: 0.85rem; text-decoration: none;">
+                        ▶ Replay
+                    </a>
                     {% endif %}
-                </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty">
+        <p>No games played yet. Play a game to see your stats here!</p>
+    </div>
+    {% endif %}
+<script src="{% static 'game/js/theme.js' %}?v=1"></script>
+
+    <h2>Learning Progress</h2>
+
+    <div class="summary">
+
+        <div class="card">
+            <div class="num">{{ lessons_completed }}</div>
+            <div class="label">Lessons Completed</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ lesson_completion_percentage }}%</div>
+            <div class="label">Lesson Completion</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ progress.level }}</div>
+            <div class="label">Current Level</div>
+        </div>
+
+    </div>
+
+    <h2>Rating Analytics</h2>
+
+    <div class="summary">
+
+        <div class="card">
+            <div class="num">{{ highest_rating }}</div>
+            <div class="label">Highest Rating</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ lowest_rating }}</div>
+            <div class="label">Lowest Rating</div>
+        </div>
+
+        <div class="card">
+            <div class="num">{{ average_rating }}</div>
+            <div class="label">Average Rating</div>
+        </div>
+
+        <div class="card">
+            <div class="num">
+                {% if total_rating_change > 0 %}
+                    +{{ total_rating_change }}
+                {% else %}
+                    {{ total_rating_change }}
+                {% endif %}
                 <div class="label">Rating Change</div>
             </div>
         </div>

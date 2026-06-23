@@ -7,6 +7,7 @@ import math
 import ipaddress
 import secrets
 import secrets as secrets_module
+from game.views_history import save_game_record
 from django.http import HttpResponseServerError
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.conf import settings
@@ -195,6 +196,7 @@ def record_game_result(request, mode, winner, reason, player_color='white', move
         )
         
         check_game_achievements(user)
+    return result
 
 
 @require_POST
@@ -243,9 +245,17 @@ def make_move(request):
         request.session.modified = True
         if game_status == 'checkmate':
             winner = 'black' if game.current_turn == 'white' else 'white'
-            record_game_result(request, game.mode, winner, 'checkmate', game.player_color, moves=game.move_history)
+            game_result = record_game_result(request, game.mode, winner, 'checkmate', game.player_color, moves=game.move_history)            
+            replay_record = save_game_record(request, pgn=game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')), result='1-0' if winner == 'white' else '0-1', termination='checkmate', white_label=request.session.get('white_name', 'White'), black_label=request.session.get('black_name', 'Black'))
+            if game_result is not None:
+                game_result.replay_record = replay_record
+                game_result.save(update_fields=['replay_record'])
         elif game_status in ('stalemate', 'draw'):
-            record_game_result(request, game.mode, 'draw', game.draw_reason or 'stalemate', game.player_color, moves=game.move_history)
+            game_result = record_game_result(request, game.mode, 'draw', game.draw_reason or 'stalemate', game.player_color, moves=game.move_history)            
+            replay_record = save_game_record(request, pgn=game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')), result='1/2-1/2', termination=game.draw_reason or 'stalemate', white_label=request.session.get('white_name', 'White'), black_label=request.session.get('black_name', 'Black'))
+            if game_result is not None:
+                game_result.replay_record = replay_record
+                game_result.save(update_fields=['replay_record'])
 
     return JsonResponse({
         'valid': success,
@@ -585,9 +595,17 @@ def ai_move(request):
 
         if game_status == 'checkmate':
             winner = 'black' if game.current_turn == 'white' else 'white'
-            record_game_result(request, game.mode, winner, 'checkmate', game.player_color, moves=game.move_history)
+            game_result = record_game_result(request, game.mode, winner, 'checkmate', game.player_color, moves=game.move_history)
+            replay_record = save_game_record(request, pgn=game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')), result='1-0' if winner == 'white' else '0-1', termination='checkmate', white_label=request.session.get('white_name', 'White'), black_label=request.session.get('black_name', 'Black'))
+            if game_result is not None:
+                game_result.replay_record = replay_record
+                game_result.save(update_fields=['replay_record'])
         elif game_status in ('stalemate', 'draw'):
-            record_game_result(request, game.mode, 'draw', game.draw_reason or 'stalemate', game.player_color, moves=game.move_history)
+            game_result = record_game_result(request, game.mode, 'draw', game.draw_reason or 'stalemate', game.player_color, moves=game.move_history)
+            replay_record = save_game_record(request, pgn=game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')), result='1/2-1/2', termination=game.draw_reason or 'stalemate', white_label=request.session.get('white_name', 'White'), black_label=request.session.get('black_name', 'Black'))
+            if game_result is not None:
+                game_result.replay_record = replay_record
+                game_result.save(update_fields=['replay_record'])
 
     return JsonResponse({
         'valid': success,
@@ -674,7 +692,13 @@ def resign_game(request):
     request.session.modified = True
 
     try:
-        record_game_result(request, game.mode, winner, 'resign', game.player_color, moves=game.move_history)
+        game_result = record_game_result(request, game.mode, winner, 'resign', game.player_color, moves=game.move_history)
+        pgn_str = game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black'))
+        pgn_result = '1-0' if winner == 'white' else '0-1'
+        replay_record = save_game_record(request, pgn=pgn_str, result=pgn_result, termination='resignation', white_label=request.session.get('white_name', 'White'), black_label=request.session.get('black_name', 'Black'))
+        if game_result is not None:
+            game_result.replay_record = replay_record
+            game_result.save(update_fields=['replay_record'])
     except Exception as e:
         logger.error('Failed to record resign result: %s', e)
 
@@ -1604,9 +1628,7 @@ def logout_view(request):
 def stats_view(request):
     """Display game statistics."""
     # Only show real database records linked to the logged-in user
-    user_results = GameResult.objects.filter(
-        user=request.user
-    ).exclude(mode__in=['', None])
+    user_results = request.user.game_results.all().exclude(mode__in=['', None])
 
     total_games = user_results.count()
 
@@ -1921,8 +1943,61 @@ def get_daily_puzzle(request):
         "id": puzzle.id,
         "title": puzzle.title,
         "fen": puzzle.fen,
-        "solution": puzzle.solution,
         "difficulty": puzzle.difficulty or "medium"
+    })
+
+
+def puzzles_view(request):
+    """Render the puzzles dashboard page."""
+    return render(request, "game/puzzle_list.html")
+
+
+@require_GET
+def puzzles_list_api(request):
+    """API endpoint to get list of puzzles, excluding solutions."""
+    puzzles = ChessPuzzle.objects.all()
+
+    # Filter by difficulty
+    difficulty = request.GET.get('difficulty')
+    if difficulty:
+        puzzles = puzzles.filter(difficulty__iexact=difficulty)
+
+    # Search by title
+    search_query = request.GET.get('search') or request.GET.get('q')
+    if search_query:
+        puzzles = puzzles.filter(title__icontains=search_query)
+
+    puzzles_data = []
+    for puzzle in puzzles:
+        puzzles_data.append({
+            "id": puzzle.id,
+            "title": puzzle.title,
+            "fen": puzzle.fen,
+            "difficulty": puzzle.difficulty or "medium",
+            "date": puzzle.date.isoformat() if puzzle.date else None
+        })
+    return JsonResponse(puzzles_data, safe=False)
+
+
+@require_GET
+def puzzle_detail_api(request, puzzle_id):
+    """API endpoint to get a single puzzle's details (excluding solution)."""
+    puzzle = get_object_or_404(ChessPuzzle, id=puzzle_id)
+    return JsonResponse({
+        "id": puzzle.id,
+        "title": puzzle.title,
+        "fen": puzzle.fen,
+        "difficulty": puzzle.difficulty or "medium",
+        "date": puzzle.date.isoformat() if puzzle.date else None
+    })
+
+
+@require_GET
+def puzzle_solution_api(request, puzzle_id):
+    """API endpoint to retrieve the solution array for a specific puzzle."""
+    puzzle = get_object_or_404(ChessPuzzle, id=puzzle_id)
+    return JsonResponse({
+        "solution": puzzle.solution
     })
 
 
@@ -1937,7 +2012,8 @@ def cleanup_cron(request):
     expected = f"Bearer {cron_secret}" if cron_secret else ""
     provided = auth_header or ""
 
-    if not cron_secret or not secrets_module.compare_digest(expected, provided):
+    if (not cron_secret or
+            not secrets_module.compare_digest(expected, provided)):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
