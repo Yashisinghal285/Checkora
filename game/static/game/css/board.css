@@ -1368,10 +1368,8 @@ body {
         font-size: 1.15rem;
         font-weight: 700;
         flex-shrink: 0;
+        color: #fed7aa;
     }
-
-    color: #fed7aa;
-}
 
 /* Low time warning — stage 3: 10s–1s (red + scale pulse animation) */
 @keyframes low-time-pulse {
@@ -1708,7 +1706,6 @@ body {
     position: absolute !important;
     top: 37px !important;
     right: 0 !important;
-     !important;
 }
 
 .promo-overlay .btn-gold {
