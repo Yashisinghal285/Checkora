@@ -4416,7 +4416,10 @@
         }
     });
     if (typeof module !== "undefined" && module.exports) {
-        module.exports = { pColor, getSquareLabel, formatTime, getPlayerScore, validateMoveWithStockfish, clearEvaluationCache };
+        module.exports = { 
+            pColor, getSquareLabel, formatTime, getPlayerScore, validateMoveWithStockfish, clearEvaluationCache,
+            onClick, onDragStart, onDrop, showPromoModal, hidePromoModal, onPromoChoice, toggleSquareHighlight, refreshHighlights, highlightCheck, startNewGame
+        };
     } else {
         loadGame();
     }
@@ -4755,4 +4758,95 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     });
+
+    const shareBtn = document.getElementById('shareResultBtn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', function () {
+            const titleEl = document.getElementById('gameOverTitle');
+            const messageEl = document.getElementById('gameOverMessage');
+            const whiteNameEl = document.getElementById('whiteNameLabel');
+            const blackNameEl = document.getElementById('blackNameLabel');
+            const movesList = document.getElementById('movesList');
+            
+            const title = titleEl ? titleEl.innerText.trim() : '';
+            const message = messageEl ? messageEl.innerText.trim() : '';
+            const whiteName = whiteNameEl ? whiteNameEl.innerText.trim() : '';
+            const blackName = blackNameEl ? blackNameEl.innerText.trim() : '';
+            
+            let moveCount = 0;
+            if (movesList) {
+                moveCount = movesList.querySelectorAll('span:not(.placeholder)').length ||
+                            movesList.innerText.split('\n').filter(x => x.trim()).length;
+            }
+
+            const cardTitle = document.getElementById('cardTitle');
+            const cardMessage = document.getElementById('cardMessage');
+            const cardWhite = document.getElementById('cardWhite');
+            const cardBlack = document.getElementById('cardBlack');
+            const cardMoves = document.getElementById('cardMoves');
+            
+            if(cardTitle) cardTitle.innerText = title;
+            if(cardMessage) cardMessage.innerText = message;
+            if(cardWhite) cardWhite.innerText = whiteName;
+            if(cardBlack) cardBlack.innerText = blackName;
+            if(cardMoves) cardMoves.innerText = moveCount;
+
+            const shareText =
+`♟️ Checkora Chess
+─────────────────
+${title}
+${message}
+
+⚪ ${whiteName} vs ⚫ ${blackName}
+🔢 Moves played: ${moveCount}
+─────────────────
+🎮 Play at: https://checkora.vercel.app`;
+
+            const modal = document.getElementById('shareModal');
+            if (modal) modal.style.display = 'flex';
+
+            const copyTextBtn = document.getElementById('copyTextBtn');
+            if (copyTextBtn) {
+                copyTextBtn.onclick = function () {
+                    navigator.clipboard.writeText(shareText).then(() => {
+                        this.innerText = '✅ Copied!';
+                        setTimeout(() => this.innerText = '📋 Copy Text', 2000);
+                    });
+                };
+            }
+
+            const copyLinkBtn = document.getElementById('copyLinkBtn');
+            if (copyLinkBtn) {
+                copyLinkBtn.onclick = function () {
+                    navigator.clipboard.writeText('https://checkora.vercel.app').then(() => {
+                        this.innerText = '✅ Link Copied!';
+                        setTimeout(() => this.innerText = '🔗 Copy Link', 2000);
+                    });
+                };
+            }
+
+            const whatsappBtn = document.getElementById('whatsappBtn');
+            if (whatsappBtn) {
+                whatsappBtn.onclick = function () {
+                    const encoded = encodeURIComponent(shareText);
+                    window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+                };
+            }
+
+            const twitterBtn = document.getElementById('twitterBtn');
+            if (twitterBtn) {
+                twitterBtn.onclick = function () {
+                    const encoded = encodeURIComponent(shareText);
+                    window.open(`https://twitter.com/intent/tweet?text=${encoded}`, '_blank', 'noopener,noreferrer');
+                };
+            }
+
+            const closeShareBtn = document.getElementById('closeShareBtn');
+            if (closeShareBtn && modal) {
+                closeShareBtn.onclick = function () {
+                    modal.style.display = 'none';
+                };
+            }
+        });
+    }
 });
