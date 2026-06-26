@@ -85,47 +85,57 @@
 
   <body>
     <nav class="navbar">
-      <div class="nav-left">
+    <div class="nav-left">
         <a href="{% url 'landing' %}" class="logo-link">
-          <img
-            src="{% static 'game/checkora_icon_only.png' %}"
-            alt="Checkora Logo"
-            class="logo-img"
-          />
-          <span class="logo-text"
-            >CHECK<span class="logo-accent">ORA</span></span
-          >
+            <img
+                src="{% static 'game/checkora_icon_only.png' %}"
+                alt="Checkora Logo"
+                class="logo-img"
+            />
+            <span class="logo-text">
+                CHECK<span class="logo-accent">ORA</span>
+            </span>
         </a>
-        <div class="nav-links">
-          <a href="#about">About</a>
-          <a href="#features">Features</a>
-        </div>
-      </div>
-      <div class="nav-right">
+    </div>
+
+    <button
+        class="nav-toggle"
+        id="nav-toggle"
+        type="button"
+        aria-label="Toggle navigation"
+        aria-expanded="false"
+    >
+        ☰
+    </button>
+
+    <div class="nav-links" id="nav-links">
+        <a href="#about">About</a>
+        <a href="#features">Features</a>
+    </div>
+
+    <div class="nav-right">
         <button
-id="theme-toggle"
-class="theme-toggle"
-type="button"
-aria-label="Toggle theme"
-aria-pressed="false"
-
->
-
-🌙 </button>
-
+            id="theme-toggle"
+            class="theme-toggle"
+            type="button"
+            aria-label="Toggle theme"
+            aria-pressed="false"
+        >
+            🌙
+        </button>
 
         {% if user.is_authenticated %}
         <a href="{% url 'index' %}" class="btn-signin">Dashboard</a>
         <form method="post" action="{% url 'logout' %}" style="display: inline">
-          {% csrf_token %}
-          <button type="submit" class="btn-register">Log Out</button>
+            {% csrf_token %}
+            <button type="submit" class="btn-register">Log Out</button>
         </form>
         {% else %}
         <a href="{% url 'login' %}" class="btn-signin">Sign In</a>
         <a href="{% url 'register' %}" class="btn-register">Register</a>
         {% endif %}
-      </div>
-    </nav>
+    </div>
+</nav>
 
     <main class="hero" id="hero">
       <div class="ambient-glow glow-gold"></div>
@@ -498,5 +508,6 @@ function updateIcon() {
 });
 });
 </script>
+<script src="{% static 'game/js/landing.js' %}"></script>
   </body>
 </html>
