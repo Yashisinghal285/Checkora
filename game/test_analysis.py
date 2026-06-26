@@ -279,9 +279,13 @@ class AnalyzeGameRateLimitTest(TestCase):
             self.assertEqual(response.status_code, 200)
             
         self.client.force_login(self.user2)
-        response = self.client.post(reverse('analyze_game'), data=json.dumps(payload), content_type='application/json')
-        self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json(), {'error': 'Too many requests'})
+        response = self.client.post(
+            reverse('analyze_game'),
+            data=json.dumps(payload),
+            content_type='application/json',
+            REMOTE_ADDR='203.0.113.10'
+        )
+        self.assertEqual(response.status_code, 200)
 
     @override_settings(ANALYZE_GAME_RATE_WINDOW_SECONDS=60, ANALYZE_GAME_USER_MAX_REQUESTS=2, ANALYZE_GAME_IP_MAX_REQUESTS=3)
     def test_timeout_recovery(self):

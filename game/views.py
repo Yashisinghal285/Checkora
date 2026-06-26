@@ -2196,9 +2196,11 @@ def analyze_game_view(request):
     ip_key = get_analyze_rate_ip_key(get_client_ip(request))
 
     user_count = increment_counter(user_key, timeout=window)
-    ip_count = increment_counter(ip_key, timeout=window)
+    if user_count > user_max:
+        return JsonResponse({'error': 'Too many requests'}, status=429)
 
-    if user_count > user_max or ip_count > ip_max:
+    ip_count = increment_counter(ip_key, timeout=window)
+    if ip_count > ip_max:
         return JsonResponse({'error': 'Too many requests'}, status=429)
 
     try:
