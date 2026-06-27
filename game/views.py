@@ -4,6 +4,8 @@ import json
 import time
 import hashlib
 import math
+import io
+import base64
 import ipaddress
 import secrets
 import secrets as secrets_module
@@ -68,6 +70,7 @@ from .models import (
     PlayerRating,
     RatingHistory,
     OpeningProgress,
+    UserProfile,
 )
 
 from .rating_service import calculate_rating_change
@@ -283,7 +286,7 @@ def make_move(request):
         'game_status': game_status,
         'draw_reason': game.draw_reason,
         'threefold_warning': game.threefold_warning,
-        'fen': game.generate_fen_key(),
+        'fen': game.generate_full_fen(),
         'pgn': game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')),
         'white_name': request.session.get('white_name', 'White'),
         'black_name': request.session.get('black_name', 'Black'),
@@ -406,7 +409,7 @@ def new_game(request):
         'difficulty': difficulty,
         'time_limit': getattr(game, 'time_limit', 600),
         'increment': getattr(game, 'increment', 0),
-        'fen': game.generate_fen_key(),
+        'fen': game.generate_full_fen(),
         'pgn': game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')),
         'game_status': game.game_status,
         'draw_reason': game.draw_reason,
@@ -452,7 +455,7 @@ def resume_game(request):
         'game_status': game.game_status,
         'draw_reason': game.draw_reason,
         'threefold_warning': game.threefold_warning,
-        'fen': game.generate_fen_key(),
+        'fen': game.generate_full_fen(),
         'pgn': game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')),
         'difficulty': request.session.get('difficulty', 'medium'),
     })
@@ -520,7 +523,7 @@ def get_state(request):
         'difficulty': request.session.get('difficulty', 'medium'),
         'white_name': request.session.get('white_name', 'White'),
         'black_name': request.session.get('black_name', 'Black'),
-        'fen': game.generate_fen_key(),
+        'fen': game.generate_full_fen(),
         'pgn': game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')),
         'game_status': game.game_status,
         'draw_reason': game.draw_reason,
@@ -664,7 +667,7 @@ def ai_move(request):
         'game_status': game_status,
         'draw_reason': game.draw_reason,
         'threefold_warning': game.threefold_warning,
-        'fen': game.generate_fen_key(),
+        'fen': game.generate_full_fen(),
         'pgn': game.generate_pgn(request.session.get('white_name', 'White'), request.session.get('black_name', 'Black')),
         'white_name': request.session.get('white_name', 'White'),
         'black_name': request.session.get('black_name', 'Black'),
@@ -2224,8 +2227,19 @@ def analyze_game_view(request):
         result = data.get('result', 'Unknown')
         reason = data.get('reason', 'Unknown')
 
+        fen_history = data.get('fen_history')
+
         if not isinstance(moves, list):
             return JsonResponse({'error': 'Moves must be a list'}, status=400)
+            
+        if fen_history is not None:
+            if not isinstance(fen_history, list):
+                return JsonResponse({'error': 'fen_history must be a list'}, status=400)
+            if len(fen_history) > MAX_ANALYSIS_MOVES + 1:
+                return JsonResponse({'error': f'fen_history list cannot exceed {MAX_ANALYSIS_MOVES + 1} entries'}, status=400)
+            for fen in fen_history:
+                if not isinstance(fen, str) or len(fen) > 100:
+                    return JsonResponse({'error': 'fen_history items must be strings of at most 100 characters'}, status=400)
 
         if len(moves) > MAX_ANALYSIS_MOVES:
             return JsonResponse({'error': f'Moves list cannot exceed {MAX_ANALYSIS_MOVES} entries'}, status=400)
@@ -2233,8 +2247,7 @@ def analyze_game_view(request):
         for m in moves:
             if not isinstance(m, str) or len(m) > MAX_MOVE_LENGTH:
                 return JsonResponse({'error': f'Move must be a string of at most {MAX_MOVE_LENGTH} characters'}, status=400)
-
-        summary = build_summary(moves, result, reason)
+        summary = build_summary(moves, result, reason, fen_history=fen_history)
         return JsonResponse(summary)
     except Exception as e:
         logger.error('Failed to analyze game: %s', e)
@@ -3974,3 +3987,119 @@ def forum_reply_delete(request, reply_id):
 
     messages.success(request, "Reply deleted successfully.")
     return redirect("forum_detail", discussion_id=reply.discussion.id)
+
+
+# ---------------------------------------------------------------------------
+# Avatar management views
+# ---------------------------------------------------------------------------
+
+@login_required
+def upload_avatar(request):
+    """Handle avatar upload (GET renders form, POST processes the file).
+
+    Uploaded images are:
+    * Validated for format (PNG / JPEG / WEBP) and size (≤ 5 MB) by the form.
+    * Resized to at most 256 × 256 pixels (aspect-ratio preserved) by Pillow.
+    * Compressed and stored as a base64-encoded data URI in the database.
+
+    Storing in the database (instead of the filesystem) keeps avatars
+    persistent across Vercel's ephemeral serverless execution cycles.
+    """
+    from .forms import AvatarUploadForm
+    from PIL import Image
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == "POST":
+        form = AvatarUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            uploaded_file = form.cleaned_data["avatar"]
+            try:
+                img = Image.open(uploaded_file)
+                # Pixel bomb guard: restrict dimensions before decoding
+                if img.size[0] > 4096 or img.size[1] > 4096:
+                    raise ValueError(
+                        "Image dimensions exceed the maximum allowed size of "
+                        "4096×4096."
+                    )
+
+                # Eagerly decode the entire image to catch truncated /
+                # corrupt files before any transformation takes place.
+                try:
+                    img.load()
+                except Exception as exc:
+                    raise ValueError("Image file appears to be corrupt or truncated.") from exc
+                # Convert to a mode that JPEG / PNG can handle cleanly.
+                if img.mode in ("RGBA", "LA", "P"):
+                    img = img.convert("RGBA")
+                    save_format = "PNG"
+                    mime = "image/png"
+                else:
+                    img = img.convert("RGB")
+                    save_format = "JPEG"
+                    mime = "image/jpeg"
+
+                # Resize to max 256 × 256, preserving aspect ratio.
+                img.thumbnail((256, 256), Image.LANCZOS)
+
+                buffer = io.BytesIO()
+                if save_format == "JPEG":
+                    img.save(buffer, format="JPEG", quality=85, optimize=True)
+                else:
+                    img.save(buffer, format="PNG", optimize=True)
+
+                encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                profile.avatar = f"data:{mime};base64,{encoded}"
+                profile.save()
+                messages.success(
+                    request,
+                    "Your avatar has been updated successfully!"
+                )
+            except Exception:
+                logger.exception("Avatar processing failed for user %s", request.user.username)
+                messages.error(
+                    request,
+                    "Failed to process image. Please try a different file."
+                )
+        else:
+            for field_errors in form.errors.values():
+                for error in field_errors:
+                    messages.error(request, error)
+
+        return redirect("upload_avatar")
+
+    form = AvatarUploadForm()
+    return render(request, "game/avatar.html", {
+        "form": form,
+        "profile": profile,
+    })
+
+
+@login_required
+@require_POST
+def remove_avatar(request):
+    """Clear the user's avatar, reverting to the default fallback."""
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.avatar = ""
+    profile.save()
+    messages.success(request, "Avatar removed successfully.")
+    return redirect("upload_avatar")
+
+
+@login_required
+@require_GET
+def get_avatar(request):
+    """Return the current user's avatar as a JSON response.
+
+    Returns the base64 data URI (or an empty string when no avatar is set)
+    for use by JavaScript on pages that need to display the avatar
+    dynamically without a full page reload.
+    """
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    # Use defer to avoid loading the full avatar blob into the ORM object
+    # when the profile already exists (get_or_create falls back to a
+    # regular fetch which does load it, so we re-fetch with .only() here).
+    avatar = UserProfile.objects.filter(user=request.user).values_list(
+        "avatar", flat=True
+    ).first() or ""
+    return JsonResponse({"avatar": avatar})

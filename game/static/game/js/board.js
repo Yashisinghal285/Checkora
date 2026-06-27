@@ -1190,12 +1190,37 @@
         if (whiteCapturedName) whiteCapturedName.textContent = wName;
         if (blackCapturedName) blackCapturedName.textContent = bName;
 
+        const whiteAvatarEl = document.getElementById('whitePlayerAvatar');
+        const blackAvatarEl = document.getElementById('blackPlayerAvatar');
+        const whiteCapturedAvatarEl = document.getElementById('whiteCapturedAvatar');
+        const blackCapturedAvatarEl = document.getElementById('blackCapturedAvatar');
+
         if (gameMode === 'ai') {
             if (whiteYouTag) whiteYouTag.style.display = (playerColor === 'white') ? 'inline' : 'none';
             if (blackYouTag) blackYouTag.style.display = (playerColor === 'black') ? 'inline' : 'none';
+            if (whiteAvatarEl && window.USER_AVATAR_URL) {
+                whiteAvatarEl.src = window.USER_AVATAR_URL;
+                whiteAvatarEl.style.display = (playerColor === 'white') ? 'inline-block' : 'none';
+                if (whiteCapturedAvatarEl) {
+                    whiteCapturedAvatarEl.src = window.USER_AVATAR_URL;
+                    whiteCapturedAvatarEl.style.display = (playerColor === 'white') ? 'inline-block' : 'none';
+                }
+            }
+            if (blackAvatarEl && window.USER_AVATAR_URL) {
+                blackAvatarEl.src = window.USER_AVATAR_URL;
+                blackAvatarEl.style.display = (playerColor === 'black') ? 'inline-block' : 'none';
+                if (blackCapturedAvatarEl) {
+                    blackCapturedAvatarEl.src = window.USER_AVATAR_URL;
+                    blackCapturedAvatarEl.style.display = (playerColor === 'black') ? 'inline-block' : 'none';
+                }
+            }
         } else {
             if (whiteYouTag) whiteYouTag.style.display = 'none';
             if (blackYouTag) blackYouTag.style.display = 'none';
+            if (whiteAvatarEl) whiteAvatarEl.style.display = 'none';
+            if (blackAvatarEl) blackAvatarEl.style.display = 'none';
+            if (whiteCapturedAvatarEl) whiteCapturedAvatarEl.style.display = 'none';
+            if (blackCapturedAvatarEl) blackCapturedAvatarEl.style.display = 'none';
         }
     }
 
@@ -2612,8 +2637,22 @@
         // 6. Opening Book and Review Highlights
         let analysisData = null;
         try {
+            let fenHistory = [];
+            if (window.Chess) {
+                let tempChess = new window.Chess();
+                fenHistory.push(tempChess.fen());
+                for (let move of replayMoves) {
+                    let res = tempChess.move(move);
+                    if (!res) {
+                        break;
+                    }
+                    fenHistory.push(tempChess.fen());
+                }
+            }
+
             analysisData = await post('/api/analyze-game/', {
                 moves: replayMoves,
+                fen_history: fenHistory,
                 result: resultState,
                 reason: reason
             });
@@ -2639,6 +2678,21 @@
 
             const proEl = document.getElementById('resAnalysisPromotions');
             if (proEl) proEl.textContent = analysisData.promotions || 0;
+
+            const accuracyEl = document.getElementById('resAccuracyScore');
+            if (accuracyEl && analysisData.accuracy !== undefined) {
+                accuracyEl.textContent = `${analysisData.accuracy}%`;
+            }
+
+            const mistakesEl = document.getElementById('resMistakesCount');
+            if (mistakesEl && analysisData.mistakes !== undefined) {
+                mistakesEl.textContent = analysisData.mistakes;
+            }
+
+            const blundersEl = document.getElementById('resBlundersCount');
+            if (blundersEl && analysisData.blunders !== undefined) {
+                blundersEl.textContent = analysisData.blunders;
+            }
         }
 
         const bestMoveEl = document.getElementById('resBestMove');
@@ -2655,8 +2709,19 @@
 
         const blunderEl = document.getElementById('resBlunder');
         if (blunderEl) {
-            blunderEl.textContent = replayMoves.length > 20 ? '1 mistake (Full review)' : 'None';
+            const blunderLabel = blunderEl.previousElementSibling;
+            if (analysisData && analysisData.blunders > 0) {
+                blunderEl.textContent = `${analysisData.blunders} Blunder${analysisData.blunders > 1 ? 's' : ''}`;
+                if (blunderLabel) blunderLabel.textContent = 'Blunder';
+            } else if (analysisData && analysisData.mistakes > 0) {
+                blunderEl.textContent = `${analysisData.mistakes} Mistake${analysisData.mistakes > 1 ? 's' : ''}`;
+                if (blunderLabel) blunderLabel.textContent = 'Mistake';
+            } else {
+                blunderEl.textContent = 'None';
+                if (blunderLabel) blunderLabel.textContent = 'Blunder';
+            }
         }
+
 
         // Delay the overlay and celebration effects by 0.5 seconds
         setTimeout(() => {
@@ -4391,7 +4456,10 @@
         }
     });
     if (typeof module !== "undefined" && module.exports) {
-        module.exports = { pColor, getSquareLabel, formatTime, getPlayerScore, validateMoveWithStockfish, clearEvaluationCache };
+        module.exports = { 
+            pColor, getSquareLabel, formatTime, getPlayerScore, validateMoveWithStockfish, clearEvaluationCache,
+            onClick, onDragStart, onDrop, showPromoModal, hidePromoModal, onPromoChoice, toggleSquareHighlight, refreshHighlights, highlightCheck, startNewGame
+        };
     } else {
         loadGame();
     }
@@ -4730,4 +4798,95 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     });
+
+    const shareBtn = document.getElementById('shareResultBtn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', function () {
+            const titleEl = document.getElementById('gameOverTitle');
+            const messageEl = document.getElementById('gameOverMessage');
+            const whiteNameEl = document.getElementById('whiteNameLabel');
+            const blackNameEl = document.getElementById('blackNameLabel');
+            const movesList = document.getElementById('movesList');
+            
+            const title = titleEl ? titleEl.innerText.trim() : '';
+            const message = messageEl ? messageEl.innerText.trim() : '';
+            const whiteName = whiteNameEl ? whiteNameEl.innerText.trim() : '';
+            const blackName = blackNameEl ? blackNameEl.innerText.trim() : '';
+            
+            let moveCount = 0;
+            if (movesList) {
+                moveCount = movesList.querySelectorAll('span:not(.placeholder)').length ||
+                            movesList.innerText.split('\n').filter(x => x.trim()).length;
+            }
+
+            const cardTitle = document.getElementById('cardTitle');
+            const cardMessage = document.getElementById('cardMessage');
+            const cardWhite = document.getElementById('cardWhite');
+            const cardBlack = document.getElementById('cardBlack');
+            const cardMoves = document.getElementById('cardMoves');
+            
+            if(cardTitle) cardTitle.innerText = title;
+            if(cardMessage) cardMessage.innerText = message;
+            if(cardWhite) cardWhite.innerText = whiteName;
+            if(cardBlack) cardBlack.innerText = blackName;
+            if(cardMoves) cardMoves.innerText = moveCount;
+
+            const shareText =
+`♟️ Checkora Chess
+─────────────────
+${title}
+${message}
+
+⚪ ${whiteName} vs ⚫ ${blackName}
+🔢 Moves played: ${moveCount}
+─────────────────
+🎮 Play at: https://checkora.vercel.app`;
+
+            const modal = document.getElementById('shareModal');
+            if (modal) modal.style.display = 'flex';
+
+            const copyTextBtn = document.getElementById('copyTextBtn');
+            if (copyTextBtn) {
+                copyTextBtn.onclick = function () {
+                    navigator.clipboard.writeText(shareText).then(() => {
+                        this.innerText = '✅ Copied!';
+                        setTimeout(() => this.innerText = '📋 Copy Text', 2000);
+                    });
+                };
+            }
+
+            const copyLinkBtn = document.getElementById('copyLinkBtn');
+            if (copyLinkBtn) {
+                copyLinkBtn.onclick = function () {
+                    navigator.clipboard.writeText('https://checkora.vercel.app').then(() => {
+                        this.innerText = '✅ Link Copied!';
+                        setTimeout(() => this.innerText = '🔗 Copy Link', 2000);
+                    });
+                };
+            }
+
+            const whatsappBtn = document.getElementById('whatsappBtn');
+            if (whatsappBtn) {
+                whatsappBtn.onclick = function () {
+                    const encoded = encodeURIComponent(shareText);
+                    window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+                };
+            }
+
+            const twitterBtn = document.getElementById('twitterBtn');
+            if (twitterBtn) {
+                twitterBtn.onclick = function () {
+                    const encoded = encodeURIComponent(shareText);
+                    window.open(`https://twitter.com/intent/tweet?text=${encoded}`, '_blank', 'noopener,noreferrer');
+                };
+            }
+
+            const closeShareBtn = document.getElementById('closeShareBtn');
+            if (closeShareBtn && modal) {
+                closeShareBtn.onclick = function () {
+                    modal.style.display = 'none';
+                };
+            }
+        });
+    }
 });
