@@ -314,7 +314,8 @@ body {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    z-index: 9999;
+    /* z-index 10000 keeps dropdown above the custom cursor (z-index: 9990) */
+    z-index: 10000;
     transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
     transform: translateY(10px);
     pointer-events: none;
@@ -361,11 +362,14 @@ body {
     transform: rotate(-90deg);
 }
 
-/* Animated cursor */
+/* Animated cursor
+   z-index is INTENTIONALLY kept below the navbar dropdown (z-index: 9999+)
+   so the dropdown content always renders on top of the cursor element and
+   remains clickable when open. */
 .cursor {
     position: fixed;
     pointer-events: none;
-    z-index: 99999;
+    z-index: 9990;
     width: 18px;
     height: 18px;
     border-radius: 50%;
