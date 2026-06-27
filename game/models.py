@@ -477,6 +477,17 @@ class GameRecord(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    @property
+    def hours_remaining(self):
+        delta = self.expires_at - timezone.now()
+        if delta.total_seconds() <= 0:
+            return 0
+        return int(delta.total_seconds() // 3600)
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
     def __str__(self):
         return f"Game {self.id} ({self.white_label} vs {self.black_label})"
 class Discussion(models.Model):
@@ -493,17 +504,6 @@ class Discussion(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
-    @property
-    def hours_remaining(self):
-        delta = self.expires_at - timezone.now()
-        if delta.total_seconds() <= 0:
-            return 0
-        return int(delta.total_seconds() // 3600)
-
-    @property
-    def is_expired(self):
-        return self.expires_at <= timezone.now()
 
     def __str__(self):
         return self.title
