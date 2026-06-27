@@ -1636,8 +1636,8 @@
             const data = await post('/api/move/', body);
 
             // Opening Trainer validation
-            if (openingTrainerMode) {
-                const expectedMove =
+            if (typeof openingTrainerMode !== 'undefined' && openingTrainerMode) {
+                    const expectedMove =
                     openingTrainerSteps[currentTrainerStep]?.expected_move;
 
                 const playedMove =
