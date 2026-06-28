@@ -3589,9 +3589,13 @@ class OpeningLookupRateLimitTest(TestCase):
         res2 = self.client.get(self.trainer_url)
         self.assertEqual(res2.status_code, 200)
         
-        res3 = self.client.get(self.trainer_url)
+        res3 = self.client.get(self.trainer_url, HTTP_ACCEPT='application/json')
         self.assertEqual(res3.status_code, 429)
         self.assertEqual(res3.json(), {"error": "Opening lookup rate limit reached. Please try again shortly."})
+
+        res_html = self.client.get(self.trainer_url, HTTP_ACCEPT='text/html')
+        self.assertEqual(res_html.status_code, 429)
+        self.assertIn(b"429 Too Many Requests", res_html.content)
 
     def test_opening_detail_rate_limit(self):
         res1 = self.client.get(self.detail_url)
@@ -3600,7 +3604,7 @@ class OpeningLookupRateLimitTest(TestCase):
         res2 = self.client.get(self.detail_url)
         self.assertEqual(res2.status_code, 200)
         
-        res3 = self.client.get(self.detail_url)
+        res3 = self.client.get(self.detail_url, HTTP_ACCEPT='application/json')
         self.assertEqual(res3.status_code, 429)
         self.assertEqual(res3.json(), {"error": "Opening lookup rate limit reached. Please try again shortly."})
 
@@ -3612,7 +3616,7 @@ class OpeningLookupRateLimitTest(TestCase):
         res2 = self.client.get(self.trainer_url)
         self.assertEqual(res2.status_code, 200)
         
-        res3 = self.client.get(self.trainer_url)
+        res3 = self.client.get(self.trainer_url, HTTP_ACCEPT='application/json')
         self.assertEqual(res3.status_code, 429)
         self.assertEqual(res3.json(), {"error": "Opening lookup rate limit reached. Please try again shortly."})
 
@@ -3630,6 +3634,6 @@ class OpeningLookupRateLimitTest(TestCase):
         res5 = self.client.get(self.trainer_url)
         self.assertEqual(res5.status_code, 200)
         
-        res6 = self.client.get(self.trainer_url)
+        res6 = self.client.get(self.trainer_url, HTTP_ACCEPT='application/json')
         self.assertEqual(res6.status_code, 429)
         self.assertEqual(res6.json(), {"error": "Opening lookup rate limit reached. Please try again shortly."})

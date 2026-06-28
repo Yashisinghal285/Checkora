@@ -1583,6 +1583,15 @@ def rate_limit(window_setting, max_setting, prefix, error_message="Rate limit re
             current = increment_counter(cache_key, window_seconds)
             
             if current > max_requests:
+                if request.accepts("text/html"):
+                    from django.http import HttpResponse
+                    return HttpResponse(
+                        (
+                            "<h1>429 Too Many Requests</h1>"
+                            f"<p>{error_message}</p>"
+                        ),
+                        status=429
+                    )
                 return JsonResponse({"error": error_message}, status=429)
                 
             return view_func(request, *args, **kwargs)
