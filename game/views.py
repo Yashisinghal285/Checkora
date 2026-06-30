@@ -3792,7 +3792,16 @@ def forum_detail(request, discussion_id):
         discussion.replies
         .select_related("user", "reply_to", "reply_to__user")
         .prefetch_related("votes")
-        .annotate(vote_score=Sum("votes__value"))
+        .annotate(
+            upvote_count=Count(
+                "votes",
+                filter=models.Q(votes__value=ReplyVote.UPVOTE)
+            ),
+            downvote_count=Count(
+                "votes",
+                filter=models.Q(votes__value=ReplyVote.DOWNVOTE)
+            ),
+        )
     )
 
     bookmarked_ids = set()
@@ -3946,6 +3955,17 @@ def forum_reply_delete(request, reply_id):
 def toggle_reply_vote(request, reply_id):
     reply = get_object_or_404(Reply, id=reply_id)
 
+    # Owners may upvote their own reply but cannot downvote it
+    if reply.user == request.user and request.POST.get("vote") == "down":
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "You cannot downvote your own reply.",
+            },
+            status=400,
+        )
+
+
     if reply.is_deleted:
         return JsonResponse(
             {"success": False, "error": "Cannot vote on deleted replies."},
@@ -3980,14 +4000,16 @@ def toggle_reply_vote(request, reply_id):
             vote.value = vote_value
             vote.save(update_fields=["value", "updated_at"])
 
-    score = ReplyVote.objects.filter(reply=reply).aggregate(
-        total=Sum("value")
-    )["total"] or 0
+    counts = ReplyVote.objects.filter(reply=reply).aggregate(
+        upvotes=Count("id", filter=models.Q(value=ReplyVote.UPVOTE)),
+        downvotes=Count("id", filter=models.Q(value=ReplyVote.DOWNVOTE)),
+    )
 
     return JsonResponse(
         {
             "success": True,
-            "score": score,
+            "upvotes": counts["upvotes"],
+            "downvotes": counts["downvotes"],
             "user_vote": user_vote,
         }
     )
