@@ -3493,39 +3493,6 @@
                     welcomeOverlay.classList.add('active');
                 };
             }
-
-            // Theme Switcher
-            function initThemeSwitcher() {
-                const themeBtns = document.querySelectorAll('.theme-btn');
-                const currentTheme = document.documentElement.getAttribute('data-theme') || 'classic';
-                document.documentElement.setAttribute('data-theme', currentTheme);
-
-                themeBtns.forEach(btn => {
-                    if (btn.dataset.theme === currentTheme) {
-                        btn.classList.add('active');
-                        btn.setAttribute('aria-pressed', 'true');
-                    }
-                    btn.onclick = () => {
-                        const theme = btn.dataset.theme;
-                        document.documentElement.setAttribute('data-theme', theme);
-                        localStorage.setItem("theme", theme);
-                        themeBtns.forEach(b => {
-                            b.classList.remove('active');
-                            b.setAttribute('aria-pressed', 'false');
-                        });
-                        btn.classList.add('active');
-                        btn.setAttribute('aria-pressed', 'true');
-                    };
-                });
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initThemeSwitcher);
-
-            } else {
-                currentMins = parseFloat(strVal) || 10;
-                currentInc = 0;
-            }
         }
 
         const timeLimit = currentMins * 60;
@@ -4251,38 +4218,6 @@
         };
     }
 
-    // Theme Switcher
-    function initThemeSwitcher() {
-        const themeBtns = document.querySelectorAll('.theme-btn');
-        const currentTheme = document.documentElement.getAttribute('data-theme') || 'classic';
-        document.documentElement.setAttribute('data-theme', currentTheme);
-
-        themeBtns.forEach(btn => {
-            if (btn.dataset.theme === currentTheme) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            }
-            btn.onclick = () => {
-                const theme = btn.dataset.theme;
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('chessBoardTheme', theme);
-                themeBtns.forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-pressed', 'false');
-                });
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            };
-        });
-    }
-
-    function initSoundButtonState() {
-        if (muteBtn) {
-            muteBtn.textContent = soundEnabled ? '🔊 Sound On' : '🔇 Muted';
-            muteBtn.setAttribute('aria-pressed', String(soundEnabled));
-        }
-    }
-
     // Coordinates Visibility Preference
     function initCoordinatesToggle() {
         const showCoordsBtn = document.getElementById('showCoordinatesCheckbox');
@@ -4308,12 +4243,10 @@
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            initThemeSwitcher();
             initSoundButtonState();
             initCoordinatesToggle();
         });
     } else {
-        initThemeSwitcher();
         initSoundButtonState();
         initCoordinatesToggle();
     }
@@ -4586,31 +4519,6 @@
 
     if (leaveConfirmNo) leaveConfirmNo.addEventListener('click', closeLeaveConfirm);
 
-    // Theme Switcher
-    function initThemeSwitcher() {
-        const themeBtns = document.querySelectorAll('.theme-btn');
-        const currentTheme = document.documentElement.getAttribute('data-board-theme') || 'classic';
-        document.documentElement.setAttribute('data-board-theme', currentTheme);
-
-        themeBtns.forEach(btn => {
-            if (btn.dataset.theme === currentTheme) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            }
-            btn.onclick = () => {
-                const theme = btn.dataset.theme;
-                document.documentElement.setAttribute('data-board-theme', theme);
-                localStorage.setItem('boardTheme', theme);
-                localStorage.setItem('chessBoardTheme', theme);
-                themeBtns.forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-pressed', 'false');
-                });
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            };
-        });
-    }
 
     function showAssetWarning() {
         const t = document.getElementById('confirmTimerContainer');
@@ -5011,7 +4919,7 @@
         }
     });
 
-})();
+};
 // Enable Enter key submission for Game Setup and Lobby configurations.
 document.addEventListener("DOMContentLoaded", function () {
     const setupInputs = document.querySelectorAll('#player-name-input, .setup-menu input, #config-panel input');
@@ -5120,4 +5028,5 @@ ${message}
             }
         });
     }
+});
 });

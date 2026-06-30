@@ -1,122 +1,72 @@
-// 1. Theme detection and attribute setting run immediately at the top-level.
-// This prevents layout flashes and transition animations on initial page load.
 const safeLocalStorage = {
     get(key) {
         try {
-            return window.localStorage.getItem(key);
-        } catch (error) {
+            return localStorage.getItem(key);
+        } catch {
             return null;
         }
     },
     set(key, value) {
         try {
-            window.localStorage.setItem(key, value);
-        } catch (error) {
-            // ignore restricted storage environments
-        }
+            localStorage.setItem(key, value);
+        } catch {}
     }
 };
 
-const storedTheme = safeLocalStorage.get("theme");
-const legacyTheme = safeLocalStorage.get("chessBoardTheme");
-const validStoredTheme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : null;
-const savedTheme =
-    validStoredTheme ||
-    (legacyTheme === "light" || legacyTheme === "dark" ? legacyTheme : null) ||
-    "dark";
 
-document.documentElement.setAttribute(
-    "data-theme",
-    savedTheme
-);
+const stored = safeLocalStorage.get("theme");
 
-// 2. DOM-dependent logic runs after content is loaded.
-        document.addEventListener("DOMContentLoaded", () => {
-            const toggles = document.querySelectorAll(".theme-toggle");
+const systemPrefersLight =
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: light)").matches;
 
-            const updateToggleState = (theme) => {
-            toggles.forEach((toggle) => {
-                toggle.setAttribute("type", "button");
-                toggle.setAttribute(
-                    "aria-pressed",
-                    theme === "light" ? "true" : "false"
-                );
-                toggle.setAttribute(
-                    "aria-label",
-                    theme === "light"
-                        ? "Switch to dark mode"
-                        : "Switch to light mode"
-                );
-                toggle.textContent = theme === "light" ? "☀️" : "🌙";
-            });
-        };
+const initialTheme =
+    stored === "light" || stored === "dark"
+        ? stored
+        : systemPrefersLight
+        ? "light"
+        : "dark";
 
-    // Helper to safely trigger toast notifications, dynamically loading
-    // toast.js and toast.css on demand if they aren't statically loaded on the page.
-    const showThemeToast = (message, type = "info") => {
-        if (typeof window.showToast === "function") {
-            window.showToast(message, type);
-        } else {
-            // Dynamically load toast.css if not present
-            if (!document.getElementById("toast-css-dynamic")) {
-                const link = document.createElement("link");
-                link.id = "toast-css-dynamic";
-                link.rel = "stylesheet";
-                link.href = "/static/game/css/toast.css";
-                document.head.appendChild(link);
-            }
-            // Dynamically load toast.js if not present
-            const existingScript = document.getElementById("toast-js-dynamic");
-            if (!existingScript) {
-                const script = document.createElement("script");
-                script.id = "toast-js-dynamic";
-                script.src = "/static/game/js/toast.js";
-                script.onload = () => {
-                    if (typeof window.showToast === "function") {
-                        window.showToast(message, type);
-                    }
-                };
-                document.body.appendChild(script);
-            } else {
-                // If script exists but window.showToast is not yet defined, it means the script is currently loading.
-                // We attach the callback to the existing script's load event.
-                existingScript.addEventListener("load", () => {
-                    if (typeof window.showToast === "function") {
-                        window.showToast(message, type);
-                    }
-                });
-            }
-        }
-    };
+// APPLY IMMEDIATELY (IMPORTANT)
+document.documentElement.setAttribute("data-theme", initialTheme);
 
-    updateToggleState(savedTheme);
+// ---------- UI ----------
+document.addEventListener("DOMContentLoaded", () => {
+    const toggles = document.querySelectorAll(".theme-toggle");
+    if (!toggles.length) return;
 
-    let transitionTimeout = null;
+    let timeout;
 
-    toggles.forEach((toggle) => {
-    toggle.addEventListener("click", () => {
-            const currentTheme = document.documentElement.getAttribute("data-theme");
-            const newTheme = currentTheme === "light" ? "dark" : "light";
-
-            // Clear any active transition timeout to handle rapid toggles
-            if (transitionTimeout) {
-                clearTimeout(transitionTimeout);
-            }
-
-            // Temporarily enable theme transitions
-            document.documentElement.classList.add("theme-transition");
-            document.documentElement.setAttribute("data-theme", newTheme);
-            safeLocalStorage.set("theme", newTheme);
-            updateToggleState(newTheme);
-
-            // Trigger the toast notification
-            showThemeToast(`Switched to ${newTheme === "light" ? "Light" : "Dark"} Mode`, "info");
-
-            // Remove the class after the transition finishes (0.3s)
-            transitionTimeout = setTimeout(() => {
-                document.documentElement.classList.remove("theme-transition");
-                transitionTimeout = null;
-            }, 300);
+    function syncUI(currentTheme) {
+        toggles.forEach(btn => {
+            btn.textContent = currentTheme === "light" ? "☀️" : "🌙";
+            btn.setAttribute("aria-pressed", String(currentTheme === "light"));
+            btn.setAttribute(
+                "aria-label",
+                currentTheme === "light"
+                    ? "Switch to dark mode"
+                    : "Switch to light mode"
+            );
         });
     }
-)});
+
+    syncUI(initialTheme);
+
+    toggles.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const current = safeLocalStorage.get("theme") || initialTheme;
+            const next = current === "light" ? "dark" : "light";
+
+            document.documentElement.classList.add("theme-transition");
+            document.documentElement.setAttribute("data-theme", next);
+            safeLocalStorage.set("theme", next);
+
+            syncUI(next);
+
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                document.documentElement.classList.remove("theme-transition");
+            }, 300);
+        });
+    });
+});

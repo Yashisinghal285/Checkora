@@ -31,6 +31,7 @@
       name="keywords"
       content="Checkora, Chess, AI Chess, Hybrid Chess Engine, Play Chess Online, Minimax Chess, Django Chess"
     />
+ø
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://checkora.vercel.app/" />
@@ -66,7 +67,7 @@
         "aggregateRating": {
           "@type": "AggregateRating",
           "ratingValue": "4.8",
-          "ratingCount": "150"
+.          "ratingCount": "150"
         },
         "offers": {
           "@type": "Offer",
@@ -158,8 +159,12 @@
       </div>
       <div class="nav-right">
 
-        <button type="button" id="themeToggle" class="theme-toggle">
-            🌙
+        <button
+          type="button"
+          class="theme-toggle"
+          aria-label="Toggle theme"
+          aria-pressed="false">
+          🌙
         </button>
         <div class="cursor-dropdown custom-dropdown">
           <button type="button" id="cursorTypeTrigger" class="cursor-btn" aria-haspopup="true" aria-expanded="false">
@@ -174,17 +179,6 @@
             <button type="button" class="dropdown-item cursor-type-option" data-cursor="orbit">Orbit</button>
           </div>
         </div>
-
-        <button
-id="theme-toggle"
-class="theme-toggle"
-type="button"
-aria-label="Toggle theme"
-aria-pressed="false"
-
->
-
-🌙 </button>
 
 
         {% if user.is_authenticated %}
@@ -934,10 +928,14 @@ aria-pressed="false"
             </li>
             <li class="maintainer-item">
   <span class="footer-meta-text">
-    Owner:
-    <a href="https://github.com/YOUR_USERNAME" target="_blank" rel="noopener noreferrer">
-      @YOUR_USERNAME
+    Contributors:
+      <a href="https://github.com/triemerge" target="_blank" rel="noopener noreferrer">
+        @triemerge
     </a>
+        &
+      <a href="https://github.com/EDWARD-012" target="_blank" rel="noopener noreferrer">
+       @EDWARD-012
+      </a>
   </span>
 </li>
 
@@ -1328,7 +1326,6 @@ aria-pressed="false"
     });
   })();
   </script>
-  <!-- <script src="{% static 'game/js/theme.js' %}"></script> -->
 
   <div id="disclaimerModal" role="dialog" aria-modal="true" aria-labelledby="disclaimerModalTitle"
       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
@@ -2026,8 +2023,6 @@ updateCursorType('default');
 
     </footer>
       <script>
-    document.addEventListener("DOMContentLoaded", () => {
-    const themeToggle = document.getElementById("theme-toggle");
     const root = document.documentElement;
 
     // Load saved theme
@@ -2039,46 +2034,16 @@ updateCursorType('default');
   savedTheme = null;
   }
 
-    if (savedTheme) {
-        root.setAttribute("data-theme", savedTheme);
-    } else {
         // Use system preference
         const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
 
         if (prefersLight) {
-            root.setAttribute("data-theme", "light");
+            const saved = localStorage.getItem("theme") || "dark";
+            root.setAttribute("data-theme", saved);
         }
-    }
-
-    // Update icon
-// Update icon
-function updateIcon() {
-    const isLight = root.getAttribute("data-theme") === "light";
-
-    if (isLight) {
-        themeToggle.textContent = "☀️";
-    } else {
-        themeToggle.textContent = "🌙";
-    }
-
-    themeToggle.setAttribute("aria-pressed", isLight);
-}
+    
 
 
-    updateIcon();
-
-    // Toggle theme
-    themeToggle.addEventListener("click", () => {
-    const currentTheme = root.getAttribute("data-theme");
-
-    const newTheme = currentTheme === "light" ? "dark" : "light";
-
-    root.setAttribute("data-theme", newTheme);
-    localStorage.setItem("theme", newTheme);
-
-    updateIcon();
-});
-});
 </script>
 
   </body>

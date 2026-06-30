@@ -66,19 +66,15 @@
             };
 
             const VALID_APP_THEMES = ['light', 'dark'];
-            const VALID_BOARD_THEMES = ['classic', 'dark', 'green', 'blue', 'pastel'];
+            const VALID_BOARD_THEMES = ['dark', 'green', 'blue', 'pastel'];
 
             let savedAppTheme = safeLocalStorage.get('theme');
-            if (!VALID_APP_THEMES.includes(savedAppTheme)) {
-                const legacyAppTheme = safeLocalStorage.get('chessBoardTheme');
-                savedAppTheme = VALID_APP_THEMES.includes(legacyAppTheme) ? legacyAppTheme : null;
-            }
-            if (!savedAppTheme) {
-                savedAppTheme = 'dark';
-            }
-            document.documentElement.setAttribute('data-theme', savedAppTheme);
 
-            let savedBoardTheme = safeLocalStorage.get('boardTheme') || safeLocalStorage.get('chessBoardTheme');
+              if (!VALID_APP_THEMES.includes(savedAppTheme)) {
+              savedAppTheme = 'dark';
+}
+
+            const theme = localStorage.getItem('theme') || 'dark';
             if (!savedBoardTheme) {
                 const legacyTheme = safeLocalStorage.get('theme');
                 if (!VALID_APP_THEMES.includes(legacyTheme) && VALID_BOARD_THEMES.includes(legacyTheme)) {
@@ -86,9 +82,8 @@
                 }
             }
             if (!VALID_BOARD_THEMES.includes(savedBoardTheme)) {
-                savedBoardTheme = 'classic';
+                savedBoardTheme = 'dark';
             }
-            document.documentElement.setAttribute('data-board-theme', savedBoardTheme);
 
         })();
     </script>
@@ -141,7 +136,7 @@
         <div class="promo-dialog">
             <div style="margin-bottom: 20px; color:#f0c040; position: relative;">
                 <a href="/" class="back-btn">← Back to Home</a>
-                <button type="button" id="themeToggle" class="theme-toggle" title="Toggle light / dark theme">🌙</button>
+                <button type="button" class="theme-toggle" aria-label="Toggle theme">🌙</button>
             </div>
             <div class="promo-title"
                 style="font-size: 1.6rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -325,7 +320,7 @@
         <div class="auth-buttons">
             <button
         type="button"
-        class="theme-toggle game-header-theme-toggle"
+        class="theme-toggle"
         title="Toggle light / dark theme"
         aria-label="Switch to light mode"
         aria-pressed="false">
