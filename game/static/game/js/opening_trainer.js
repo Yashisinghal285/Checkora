@@ -46,6 +46,8 @@ let userColor = "w"; // 'w' or 'b'
 let selectedSquare = null;
 let lastMoveHighlight = null;
 let opponentReplyTimeout = null;
+let hintHighlight = null;
+const hintButton = document.getElementById("get-hint-btn");
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 const feedback = document.getElementById("trainer-feedback");
@@ -328,6 +330,11 @@ function makeUserMove(fromRow, fromCol, toRow, toCol) {
 }
 
 function handleSquareClick(row, col) {
+    if (hintHighlight) {
+        hintHighlight = null;
+        renderBoard();
+    }
+
     if (viewingMoveIndex !== currentMove) return;
 
     const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
@@ -423,6 +430,15 @@ function renderBoard() {
             )) {
                 square.classList.add(lastMoveHighlight.toRow === actualRow && lastMoveHighlight.toCol === actualCol ? "highlight-to" : "highlight-from");
             }
+            // Apply hint styles if a hint is active
+            if (hintHighlight) {
+                if (hintHighlight.fromRow === actualRow && hintHighlight.fromCol === actualCol) {
+                    square.classList.add("hint-from");
+                }
+                if (hintHighlight.toRow === actualRow && hintHighlight.toCol === actualCol) {
+                    square.classList.add("hint-to");
+                }
+            }
 
             const piece = boardState[actualRow][actualCol];
             if (piece) {
@@ -448,6 +464,7 @@ function showMoveAt(index) {
 
     boardState = STARTING_BOARD_STATE.map(row => [...row]);
     lastMoveHighlight = null;
+    hintHighlight = null; // Clear hint highlight state
 
     for (let i = 0; i < index; i++) {
         const color = i % 2 === 0 ? "w" : "b";
@@ -482,6 +499,9 @@ function updateInputState() {
     if (checkButton) {
         checkButton.disabled = !isLatest || isCompleted;
     }
+    if (hintButton) {
+        hintButton.disabled = !isLatest || isCompleted;
+    }
 }
 
 function updateNavigationButtons() {
@@ -503,6 +523,7 @@ function resetGame() {
     viewingMoveIndex = 0;
     selectedSquare = null;
     lastMoveHighlight = null;
+    hintHighlight = null; // Clear hint highlight state
     if (opponentReplyTimeout) {
         clearTimeout(opponentReplyTimeout);
         opponentReplyTimeout = null;
@@ -548,6 +569,11 @@ if (playWhiteBtn && playBlackBtn) {
 
 // Support manual move text box validation in sync with the visual board
 function validateMove(move) {
+    if (hintHighlight) {
+        hintHighlight = null;
+        renderBoard();
+    }
+
     if (viewingMoveIndex !== currentMove) return false;
 
     const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
@@ -675,6 +701,31 @@ if (themeSelect) {
     // Event listener for user theme changes
     themeSelect.addEventListener("change", (e) => {
         applyTheme(e.target.value);
+    });
+}
+
+    if (hintButton) {
+    hintButton.addEventListener("click", () => {
+        if (viewingMoveIndex !== currentMove) return;
+        if (currentMove >= OPENING_MOVES.length) return;
+
+        // Ensure it is the user's turn before showing a hint
+        const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
+        if (!isUserTurn) return;
+
+        const expectedMove = OPENING_MOVES[currentMove];
+        const color = currentMove % 2 === 0 ? "w" : "b";
+        const moveParsed = parseSAN(expectedMove, color);
+
+        if (moveParsed) {
+            hintHighlight = {
+                fromRow: moveParsed.fromRow,
+                fromCol: moveParsed.fromCol,
+                toRow: moveParsed.toRow,
+                toCol: moveParsed.toCol
+            };
+            renderBoard();
+        }
     });
 }
 
