@@ -28,15 +28,7 @@ function csrf() {
     return m ? decodeURIComponent(m[1]) : "";
 }
 
-let currentMove = 0;
-let userColor = "w"; // 'w' or 'b'
-let selectedSquare = null;
-let lastMoveHighlight = null;
-let opponentReplyTimeout = null;
-const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-
-// Standard 8x8 starting setup
-let boardState = [
+const STARTING_BOARD_STATE = [
     ["br", "bn", "bb", "bq", "bk", "bb", "bn", "br"],
     ["bp", "bp", "bp", "bp", "bp", "bp", "bp", "bp"],
     ["", "", "", "", "", "", "", ""],
@@ -47,6 +39,17 @@ let boardState = [
     ["wr", "wn", "wb", "wq", "wk", "wb", "wn", "wr"]
 ];
 
+let boardState = STARTING_BOARD_STATE.map(row => [...row]);
+let currentMove = 0;
+let viewingMoveIndex = 0;
+let userColor = "w"; // 'w' or 'b'
+let selectedSquare = null;
+let lastMoveHighlight = null;
+let opponentReplyTimeout = null;
+let hintHighlight = null;
+const hintButton = document.getElementById("get-hint-btn");
+const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
 const feedback = document.getElementById("trainer-feedback");
 const progress = document.getElementById("move-progress");
 const moveInput = document.getElementById("move-input");
@@ -56,8 +59,9 @@ const playWhiteBtn = document.getElementById("play-white-btn");
 const playBlackBtn = document.getElementById("play-black-btn");
 
 function updateProgress() {
-    progress.innerText = `${currentMove} / ${OPENING_MOVES.length}`;
+    progress.innerText = `${viewingMoveIndex} / ${OPENING_MOVES.length}`;
 }
+
 
 async function persistOpeningProgress() {
     const token = csrf();
@@ -232,25 +236,28 @@ function parseSAN(san, color) {
     return null;
 }
 
-function applyMoveOnBoard(fromRow, fromCol, toRow, toCol) {
-    const piece = boardState[fromRow][fromCol];
-    boardState[fromRow][fromCol] = "";
-    boardState[toRow][toCol] = piece;
+function applyMoveToBoardState(state, fromRow, fromCol, toRow, toCol) {
+    const piece = state[fromRow][fromCol];
+    state[fromRow][fromCol] = "";
+    state[toRow][toCol] = piece;
 
     // Castling rook movement
     const pieceType = piece.slice(1);
     if (pieceType === "k" && Math.abs(fromCol - toCol) === 2) {
         if (toCol === 6) {
-            const rook = boardState[toRow][7];
-            boardState[toRow][7] = "";
-            boardState[toRow][5] = rook;
+            const rook = state[toRow][7];
+            state[toRow][7] = "";
+            state[toRow][5] = rook;
         } else if (toCol === 2) {
-            const rook = boardState[toRow][0];
-            boardState[toRow][0] = "";
-            boardState[toRow][3] = rook;
+            const rook = state[toRow][0];
+            state[toRow][0] = "";
+            state[toRow][3] = rook;
         }
     }
+}
 
+function applyMoveOnBoard(fromRow, fromCol, toRow, toCol) {
+    applyMoveToBoardState(boardState, fromRow, fromCol, toRow, toCol);
     renderBoard();
 }
 
@@ -262,6 +269,9 @@ function highlightLastMove(fromRow, fromCol, toRow, toCol) {
 function playOpponentMove() {
     if (currentMove >= OPENING_MOVES.length) return;
 
+    // Bring boardState back to currentMove to make sure parseSAN/applyMove resolves against the latest actual state
+    showMoveAt(currentMove);
+
     const color = currentMove % 2 === 0 ? "w" : "b";
     const moveStr = OPENING_MOVES[currentMove];
     const moveParsed = parseSAN(moveStr, color);
@@ -269,16 +279,19 @@ function playOpponentMove() {
     if (moveParsed) {
         applyMoveOnBoard(moveParsed.fromRow, moveParsed.fromCol, moveParsed.toRow, moveParsed.toCol);
         currentMove++;
+        viewingMoveIndex = currentMove;
         updateProgress();
         highlightLastMove(moveParsed.fromRow, moveParsed.fromCol, moveParsed.toRow, moveParsed.toCol);
 
         if (currentMove >= OPENING_MOVES.length) {
             completeOpening();
         }
+        updateNavigationButtons();
     }
 }
 
 function makeUserMove(fromRow, fromCol, toRow, toCol) {
+    if (viewingMoveIndex !== currentMove) return;
     if (currentMove >= OPENING_MOVES.length) return;
 
     const expectedMove = OPENING_MOVES[currentMove];
@@ -292,14 +305,18 @@ function makeUserMove(fromRow, fromCol, toRow, toCol) {
 
         applyMoveOnBoard(fromRow, fromCol, toRow, toCol);
         currentMove++;
+        viewingMoveIndex = currentMove;
         feedback.innerText = "✅ Correct move!";
         updateProgress();
         highlightLastMove(fromRow, fromCol, toRow, toCol);
 
         if (currentMove >= OPENING_MOVES.length) {
             completeOpening();
+            updateNavigationButtons();
             return;
         }
+
+        updateNavigationButtons();
 
         // Auto-play opponent response after 800ms
         if (opponentReplyTimeout) clearTimeout(opponentReplyTimeout);
@@ -313,6 +330,13 @@ function makeUserMove(fromRow, fromCol, toRow, toCol) {
 }
 
 function handleSquareClick(row, col) {
+    if (hintHighlight) {
+        hintHighlight = null;
+        renderBoard();
+    }
+
+    if (viewingMoveIndex !== currentMove) return;
+
     const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
     if (!isUserTurn) return;
 
@@ -344,6 +368,11 @@ function handleSquareClick(row, col) {
 }
 
 function handleDragStart(e, row, col) {
+    if (viewingMoveIndex !== currentMove) {
+        e.preventDefault();
+        return;
+    }
+
     const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
     if (!isUserTurn) {
         e.preventDefault();
@@ -401,6 +430,15 @@ function renderBoard() {
             )) {
                 square.classList.add(lastMoveHighlight.toRow === actualRow && lastMoveHighlight.toCol === actualCol ? "highlight-to" : "highlight-from");
             }
+            // Apply hint styles if a hint is active
+            if (hintHighlight) {
+                if (hintHighlight.fromRow === actualRow && hintHighlight.fromCol === actualCol) {
+                    square.classList.add("hint-from");
+                }
+                if (hintHighlight.toRow === actualRow && hintHighlight.toCol === actualCol) {
+                    square.classList.add("hint-to");
+                }
+            }
 
             const piece = boardState[actualRow][actualCol];
             if (piece) {
@@ -421,28 +459,81 @@ function renderBoard() {
     }
 }
 
+function showMoveAt(index) {
+    if (index < 0 || index > currentMove) return;
+
+    boardState = STARTING_BOARD_STATE.map(row => [...row]);
+    lastMoveHighlight = null;
+    hintHighlight = null; // Clear hint highlight state
+
+    for (let i = 0; i < index; i++) {
+        const color = i % 2 === 0 ? "w" : "b";
+        const moveStr = OPENING_MOVES[i];
+        const moveParsed = parseSAN(moveStr, color);
+
+        if (moveParsed) {
+            applyMoveToBoardState(boardState, moveParsed.fromRow, moveParsed.fromCol, moveParsed.toRow, moveParsed.toCol);
+
+            lastMoveHighlight = {
+                fromRow: moveParsed.fromRow,
+                fromCol: moveParsed.fromCol,
+                toRow: moveParsed.toRow,
+                toCol: moveParsed.toCol
+            };
+        }
+    }
+
+    viewingMoveIndex = index;
+    updateProgress();
+    renderBoard();
+    updateNavigationButtons();
+}
+
+function updateInputState() {
+    const isLatest = viewingMoveIndex === currentMove;
+    const isCompleted = currentMove >= OPENING_MOVES.length;
+
+    if (moveInput) {
+        moveInput.disabled = !isLatest || isCompleted;
+    }
+    if (checkButton) {
+        checkButton.disabled = !isLatest || isCompleted;
+    }
+    if (hintButton) {
+        hintButton.disabled = !isLatest || isCompleted;
+    }
+}
+
+function updateNavigationButtons() {
+    const prevBtn = document.getElementById("prev-move-btn");
+    const nextBtn = document.getElementById("next-move-btn");
+
+    if (prevBtn) {
+        prevBtn.disabled = (viewingMoveIndex === 0);
+    }
+    if (nextBtn) {
+        nextBtn.disabled = (viewingMoveIndex === currentMove);
+    }
+
+    updateInputState();
+}
+
 function resetGame() {
     currentMove = 0;
+    viewingMoveIndex = 0;
     selectedSquare = null;
     lastMoveHighlight = null;
+    hintHighlight = null; // Clear hint highlight state
     if (opponentReplyTimeout) {
         clearTimeout(opponentReplyTimeout);
         opponentReplyTimeout = null;
     }
-    boardState = [
-        ["br", "bn", "bb", "bq", "bk", "bb", "bn", "br"],
-        ["bp", "bp", "bp", "bp", "bp", "bp", "bp", "bp"],
-        ["", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", ""],
-        ["wp", "wp", "wp", "wp", "wp", "wp", "wp", "wp"],
-        ["wr", "wn", "wb", "wq", "wk", "wb", "wn", "wr"]
-    ];
+    boardState = STARTING_BOARD_STATE.map(row => [...row]);
     moveInput.disabled = false;
     checkButton.disabled = false;
     feedback.innerText = "Ready to begin.";
     updateProgress();
+    updateNavigationButtons();
     renderBoard();
 
     // If Black plays, the opponent makes the first White move immediately
@@ -478,6 +569,13 @@ if (playWhiteBtn && playBlackBtn) {
 
 // Support manual move text box validation in sync with the visual board
 function validateMove(move) {
+    if (hintHighlight) {
+        hintHighlight = null;
+        renderBoard();
+    }
+
+    if (viewingMoveIndex !== currentMove) return false;
+
     const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
     if (!isUserTurn) {
         feedback.innerText = "⚠️ It is the opponent's turn. Please wait.";
@@ -492,6 +590,7 @@ function validateMove(move) {
             highlightLastMove(parsed.fromRow, parsed.fromCol, parsed.toRow, parsed.toCol);
         }
         currentMove++;
+        viewingMoveIndex = currentMove;
         feedback.innerText = "✅ Correct move!";
         updateProgress();
         moveInput.value = "";
@@ -507,6 +606,7 @@ function validateMove(move) {
                 }, 800);
             }
         }
+        updateNavigationButtons();
         return true;
     }
 
@@ -529,5 +629,106 @@ moveInput.addEventListener("keypress", (event) => {
     }
 });
 
+// Navigation Stepper Event Listeners
+const prevBtn = document.getElementById("prev-move-btn");
+const nextBtn = document.getElementById("next-move-btn");
+const resetTrainerBtn = document.getElementById("reset-trainer-btn");
+
+if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+        if (viewingMoveIndex > 0) {
+            showMoveAt(viewingMoveIndex - 1);
+        }
+    });
+}
+
+if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+        if (viewingMoveIndex < currentMove) {
+            showMoveAt(viewingMoveIndex + 1);
+        }
+    });
+}
+
+if (resetTrainerBtn) {
+    resetTrainerBtn.addEventListener("click", () => {
+        resetGame();
+    });
+}
+
+// Keyboard Arrow Navigation
+document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+        return; // Don't intercept arrow keys if typing in input fields
+    }
+    if (e.key === "ArrowLeft") {
+        if (viewingMoveIndex > 0) {
+            showMoveAt(viewingMoveIndex - 1);
+        }
+    } else if (e.key === "ArrowRight") {
+        if (viewingMoveIndex < currentMove) {
+            showMoveAt(viewingMoveIndex + 1);
+        }
+    }
+});
+
+// Theme Selection Setup
+const themeSelect = document.getElementById("board-theme-select");
+
+function applyTheme(theme) {
+    if (!boardElement) return;
+
+    // Remove any previous theme- classes
+    boardElement.className.split(" ").forEach(className => {
+        if (className.startsWith("theme-")) {
+            boardElement.classList.remove(className);
+        }
+    });
+
+    // Add selected theme class
+    boardElement.classList.add(`theme-${theme}`);
+
+    // Persist in localStorage
+    localStorage.setItem("checkora-board-theme", theme);
+}
+
+if (themeSelect) {
+    // Load persisted theme or default to classic
+    const savedTheme = localStorage.getItem("checkora-board-theme") || "classic";
+    themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+
+    // Event listener for user theme changes
+    themeSelect.addEventListener("change", (e) => {
+        applyTheme(e.target.value);
+    });
+}
+
+    if (hintButton) {
+    hintButton.addEventListener("click", () => {
+        if (viewingMoveIndex !== currentMove) return;
+        if (currentMove >= OPENING_MOVES.length) return;
+
+        // Ensure it is the user's turn before showing a hint
+        const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
+        if (!isUserTurn) return;
+
+        const expectedMove = OPENING_MOVES[currentMove];
+        const color = currentMove % 2 === 0 ? "w" : "b";
+        const moveParsed = parseSAN(expectedMove, color);
+
+        if (moveParsed) {
+            hintHighlight = {
+                fromRow: moveParsed.fromRow,
+                fromCol: moveParsed.fromCol,
+                toRow: moveParsed.toRow,
+                toCol: moveParsed.toCol
+            };
+            renderBoard();
+        }
+    });
+}
+
 // Initialize game
 resetGame();
+
