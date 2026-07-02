@@ -646,6 +646,38 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+// Theme Selection Setup
+const themeSelect = document.getElementById("board-theme-select");
+
+function applyTheme(theme) {
+    if (!boardElement) return;
+
+    // Remove any previous theme- classes
+    boardElement.className.split(" ").forEach(className => {
+        if (className.startsWith("theme-")) {
+            boardElement.classList.remove(className);
+        }
+    });
+
+    // Add selected theme class
+    boardElement.classList.add(`theme-${theme}`);
+
+    // Persist in localStorage
+    localStorage.setItem("checkora-board-theme", theme);
+}
+
+if (themeSelect) {
+    // Load persisted theme or default to classic
+    const savedTheme = localStorage.getItem("checkora-board-theme") || "classic";
+    themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+
+    // Event listener for user theme changes
+    themeSelect.addEventListener("change", (e) => {
+        applyTheme(e.target.value);
+    });
+}
+
 // Initialize game
 resetGame();
 
