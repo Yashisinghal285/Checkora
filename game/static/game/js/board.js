@@ -789,13 +789,51 @@
                 gameOverTitle.textContent = title;
                 gameOverMessage.textContent = message;
                 
-                // Add celebration effects for wins
                 if (isCelebration) {
                     gameOverOverlay.classList.add('game-over-celebration');
                     createConfetti();
                     createSparkles();
                 } else {
                     gameOverOverlay.classList.remove('game-over-celebration');
+                }
+                
+                // Request post-game analysis
+                const replayMoves = Array.from(document.querySelectorAll('.move-white, .move-black'))
+                                         .map(s => s.textContent.trim())
+                                         .filter(m => m !== '...');
+
+                post('/api/analyze-game/', { moves: replayMoves }).then(data => {
+                    if (data.error) return;
+                    
+                    const panel = document.getElementById('postGameAnalysisPanel');
+                    const tbody = document.getElementById('postGameAnalysisTableBody');
+                    if (panel && tbody) {
+                        document.getElementById('resAccuracyScore').textContent = data.accuracy + '%';
+                        document.getElementById('resBlundersCount').textContent = data.blunders;
+                        
+                        tbody.innerHTML = '';
+                        data.move_analysis_details.forEach(detail => {
+                            const colorStr = detail.class === 'Best' ? '#4caf50' : '#f44336';
+                            tbody.innerHTML += `
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 5px;">${detail.move_num}</td>
+                                    <td style="padding: 5px;">${detail.played}</td>
+                                    <td style="padding: 5px;">${detail.best}</td>
+                                    <td style="padding: 5px; color: ${colorStr}">${detail.class}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                });
+
+                const replayGameBtn = document.getElementById('replayGameBtn');
+                if (replayGameBtn) {
+                    replayGameBtn.onclick = () => {
+                        const panel = document.getElementById('postGameAnalysisPanel');
+                        if (panel) {
+                            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                        }
+                    };
                 }
                 
                 gameOverOverlay.classList.add('active');
