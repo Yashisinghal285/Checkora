@@ -2348,10 +2348,14 @@ def analyze_game_view(request):
             move_num = idx // 2 + 1
             color = 'White' if idx % 2 == 0 else 'Black'
 
-            if 'x' in notation: captures += 1
-            if notation.endswith('+'): checks += 1
-            if notation.endswith('#'): checkmates += 1
-            if '=' in notation: promotions += 1
+            if 'x' in notation:
+                captures += 1
+            if notation.endswith('+'):
+                checks += 1
+            if notation.endswith('#'):
+                checkmates += 1
+            if '=' in notation:
+                promotions += 1
 
             best_move = None
             try:
@@ -2373,8 +2377,10 @@ def analyze_game_view(request):
                                     actual_from, actual_to = (r, c), (mv['row'], mv['col'])
                             except Exception as ex:
                                 logger.warning('Failed to generate notation during search: %s', ex)
-                    if actual_from: break
-                if actual_from: break
+                    if actual_from:
+                        break
+                if actual_from:
+                    break
 
             is_best = False
             played_dict = None
@@ -2388,8 +2394,10 @@ def analyze_game_view(request):
                 is_best = True
                 
             move_class = _classify_move(is_best, played_dict, best_move, game)
-            if move_class == 'Blunder': blunders += 1
-            elif move_class == 'Mistake': mistakes += 1
+            if move_class == 'Blunder':
+                blunders += 1
+            elif move_class == 'Mistake':
+                mistakes += 1
 
             best_notation = '?'
             if best_move and game.board[best_move['from_row']][best_move['from_col']]:
@@ -2403,7 +2411,8 @@ def analyze_game_view(request):
             if actual_from and actual_to:
                 game.make_move(actual_from[0], actual_from[1], actual_to[0], actual_to[1])
                 game.last_ts = time.time()
-            else: break
+            else:
+                break
 
         bad_moves = blunders + mistakes
         accuracy = round(((analyzed_moves_count - bad_moves) / analyzed_moves_count) * 100) if analyzed_moves_count > 0 else 100

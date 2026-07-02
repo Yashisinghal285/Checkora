@@ -1320,14 +1320,15 @@ class AnalyzeGameTest(TestCase):
         # Fake board state to make the heuristic think the best move captures a queen (val 9)
         with mock.patch('game.views.ChessGame') as MockGame:
             instance = MockGame.return_value
-            instance.board = [['.' for _ in range(8)] for _ in range(8)]
+            instance.board = [['' for _ in range(8)] for _ in range(8)]
             instance.board[1][3] = 'q'  # Queen at target square
+            instance.board[6][4] = 'P'  # Place moving pawn
             
             # Mock get_valid_moves and _notation so the inner loop finds it
             instance.get_valid_moves.return_value = [{'row': 4, 'col': 4}]
             instance._notation.return_value = 'e4'
-            instance._color.return_value = 'White'
-            instance.current_turn = 'White'
+            instance._color.return_value = 'white'
+            instance.current_turn = 'white'
             instance.serialize_board.return_value = 'board'
             instance.serialize_castling_rights.return_value = 'rights'
             instance._serialize_ep.return_value = '-'
@@ -1357,11 +1358,12 @@ class AnalyzeGameTest(TestCase):
         
         with mock.patch('game.views.ChessGame') as MockGame:
             instance = MockGame.return_value
-            instance.board = [['.' for _ in range(8)] for _ in range(8)]
+            instance.board = [['' for _ in range(8)] for _ in range(8)]
+            instance.board[6][4] = 'P'  # Place moving pawn
             instance.get_valid_moves.return_value = [{'row': 4, 'col': 4}]
             instance._notation.return_value = 'e4'
-            instance._color.return_value = 'White'
-            instance.current_turn = 'White'
+            instance._color.return_value = 'white'
+            instance.current_turn = 'white'
             instance.serialize_board.return_value = 'board'
             instance.serialize_castling_rights.return_value = 'rights'
             instance._serialize_ep.return_value = '-'
