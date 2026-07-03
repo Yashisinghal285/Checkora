@@ -15,9 +15,7 @@ class ChessPuzzleAdmin(admin.ModelAdmin):
     list_display = ('title', 'difficulty', 'date')
     search_fields = ('title', 'fen')
     list_filter = ('difficulty', 'date')
-
-
-original_each_context = admin.site.each_context
+    
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
