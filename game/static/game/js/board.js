@@ -2274,7 +2274,9 @@
         let isCelebration = (resultState === 'victory');
 
         // Update the session W/L/D tracker for this completed game
-        recordGameResult(resultState);
+        if (gameMode === 'ai' || reason === 'draw' || reason === 'stalemate') {
+    recordGameResult(resultState);
+}
 
         // Play distinct game over sound
         playGameOverSound(reason, resultState);
