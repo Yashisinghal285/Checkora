@@ -49,9 +49,7 @@ let opponentReplyTimeout = null;
 let hintHighlight = null;
 const hintButton = document.getElementById("get-hint-btn");
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-let activeTouchImg = null;
-let touchOffsetX = 0;
-let touchOffsetY = 0;
+const activeTouches = {};
 
 const feedback = document.getElementById("trainer-feedback");
 const progress = document.getElementById("move-progress");
@@ -416,17 +414,31 @@ function handleTouchStart(e, row, col) {
     const piece = boardState[row][col];
     if (!piece || !piece.startsWith(userColor)) return;
 
+    // Get the touch point that started this event
+    const touch = e.changedTouches ? e.changedTouches[0] : null;
+    if (!touch) return;
+
     // Prevent default scrolling/panning behavior on touch devices
     e.preventDefault();
 
-    const touch = e.touches[0];
     const img = e.currentTarget;
-
-    activeTouchImg = img;
+    const identifier = touch.identifier;
 
     const rect = img.getBoundingClientRect();
-    touchOffsetX = rect.width / 2;
-    touchOffsetY = rect.height / 2;
+    const touchOffsetX = rect.width / 2;
+    const touchOffsetY = rect.height / 2;
+
+    // Store drag state for this touch identifier
+    activeTouches[identifier] = {
+        img: img,
+        startRow: row,
+        startCol: col,
+        touchOffsetX: touchOffsetX,
+        touchOffsetY: touchOffsetY
+    };
+
+    // Store the identifier on the element to reference in move/end events
+    img.dataset.touchId = identifier;
 
     // Transition image to fixed positioning for dragging
     img.style.position = "fixed";
@@ -440,39 +452,55 @@ function handleTouchStart(e, row, col) {
 }
 
 function handleTouchMove(e, img) {
-    if (activeTouchImg !== img) return;
+    const touchIdAttr = img.dataset.touchId;
+    if (touchIdAttr === undefined) return;
+    const touchId = parseInt(touchIdAttr, 10);
+    const touchState = activeTouches[touchId];
+    if (!touchState) return;
+    // Find the specific active touch point matching this identifier
+    const touch = e.touches ? (Array.from(e.touches).find(t => t.identifier === touchId) || 
+                               Array.from(e.changedTouches || []).find(t => t.identifier === touchId)) : null;
+    if (!touch) return;
     e.preventDefault();
-
-    const touch = e.touches[0];
-    img.style.left = `${touch.clientX - touchOffsetX}px`;
-    img.style.top = `${touch.clientY - touchOffsetY}px`;
+    img.style.left = `${touch.clientX - touchState.touchOffsetX}px`;
+    img.style.top = `${touch.clientY - touchState.touchOffsetY}px`;
 }
 
 function handleTouchEnd(e, startRow, startCol) {
     const img = e.currentTarget;
-    if (activeTouchImg !== img) return;
-    activeTouchImg = null;
-
-    e.preventDefault();
-
-    const touch = e.changedTouches[0];
-
-    // Find the element under the touch coordinates
-    const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    const square = element ? element.closest(".square") : null;
-
-    if (square) {
-        const targetRow = parseInt(square.dataset.row, 10);
-        const targetCol = parseInt(square.dataset.col, 10);
-
-        // Call move logic only if dropped on a different square
-        if (targetRow !== startRow || targetCol !== startCol) {
-            makeUserMove(startRow, startCol, targetRow, targetCol);
+    const touchIdAttr = img.dataset.touchId;
+    
+    try {
+        if (touchIdAttr === undefined) return;
+        const touchId = parseInt(touchIdAttr, 10);
+        const touchState = activeTouches[touchId];
+        if (!touchState) return;
+        // Prevent click events / default behavior
+        e.preventDefault();
+        // Clean up active touch tracking
+        delete activeTouches[touchId];
+        delete img.dataset.touchId;
+        // Safely extract the corresponding touch point from changedTouches
+        const touch = e.changedTouches ? Array.from(e.changedTouches).find(t => t.identifier === touchId) : null;
+        if (touch) {
+            // Find the element under the touch coordinates
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            const square = element ? element.closest(".square") : null;
+            if (square) {
+                const targetRow = parseInt(square.dataset.row, 10);
+                const targetCol = parseInt(square.dataset.col, 10);
+                // Call move logic only if dropped on a different square
+                if (targetRow !== startRow || targetCol !== startCol) {
+                    makeUserMove(startRow, startCol, targetRow, targetCol);
+                }
+            }
         }
+    } catch (err) {
+        console.error("Touch end error:", err);
+    } finally {
+        // ALWAYS run renderBoard() to restore layout, even if an error is thrown
+        renderBoard();
     }
-
-    // Refresh the board layout to restore original image styles and DOM state
-    renderBoard();
 }
 
 function renderBoard() {
