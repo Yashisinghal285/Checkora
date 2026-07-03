@@ -8,8 +8,8 @@ function activateTab(tabId) {
         tab.classList.remove("active");
     });
 
-    document.querySelectorAll(".forum-tab-panel").forEach((panel) => {
-        panel.classList.remove("active");
+    document.querySelectorAll(".forum-tab-panel").forEach((tabPanel) => {
+        tabPanel.classList.remove("active");
     });
 
     tabBtn.classList.add("active");
@@ -37,6 +37,7 @@ function initializeForumTabs() {
 }
 
 window.addEventListener("DOMContentLoaded", initializeForumTabs);
+window.addEventListener("hashchange", restoreTabFromHash);
 
 if (typeof module !== "undefined") {
     module.exports = {
