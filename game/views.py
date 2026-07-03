@@ -741,7 +741,7 @@ def resign_game(request):
     except (json.JSONDecodeError, AttributeError, ValueError):
         resigning_player = None
 
-    if not resigning_player:
+    if resigning_player not in ['white', 'black']:
         resigning_player = game.player_color if game.mode == 'ai' else game.current_turn
 
     winner = 'black' if resigning_player == 'white' else 'white'
