@@ -49,6 +49,9 @@ let opponentReplyTimeout = null;
 let hintHighlight = null;
 const hintButton = document.getElementById("get-hint-btn");
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+let activeTouchImg = null;
+let touchOffsetX = 0;
+let touchOffsetY = 0;
 
 const feedback = document.getElementById("trainer-feedback");
 const progress = document.getElementById("move-progress");
@@ -404,6 +407,74 @@ function handleDragOver(e) {
     e.dataTransfer.dropEffect = "move";
 }
 
+function handleTouchStart(e, row, col) {
+    if (viewingMoveIndex !== currentMove) return;
+
+    const isUserTurn = (userColor === "w" && currentMove % 2 === 0) || (userColor === "b" && currentMove % 2 === 1);
+    if (!isUserTurn) return;
+
+    const piece = boardState[row][col];
+    if (!piece || !piece.startsWith(userColor)) return;
+
+    // Prevent default scrolling/panning behavior on touch devices
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    const img = e.currentTarget;
+
+    activeTouchImg = img;
+
+    const rect = img.getBoundingClientRect();
+    touchOffsetX = rect.width / 2;
+    touchOffsetY = rect.height / 2;
+
+    // Transition image to fixed positioning for dragging
+    img.style.position = "fixed";
+    img.style.width = `${rect.width}px`;
+    img.style.height = `${rect.height}px`;
+    img.style.zIndex = "1000";
+    img.style.pointerEvents = "none"; // Crucial so document.elementFromPoint can hit the underlying squares
+
+    img.style.left = `${touch.clientX - touchOffsetX}px`;
+    img.style.top = `${touch.clientY - touchOffsetY}px`;
+}
+
+function handleTouchMove(e, img) {
+    if (activeTouchImg !== img) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    img.style.left = `${touch.clientX - touchOffsetX}px`;
+    img.style.top = `${touch.clientY - touchOffsetY}px`;
+}
+
+function handleTouchEnd(e, startRow, startCol) {
+    const img = e.currentTarget;
+    if (activeTouchImg !== img) return;
+    activeTouchImg = null;
+
+    e.preventDefault();
+
+    const touch = e.changedTouches[0];
+
+    // Find the element under the touch coordinates
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const square = element ? element.closest(".square") : null;
+
+    if (square) {
+        const targetRow = parseInt(square.dataset.row, 10);
+        const targetCol = parseInt(square.dataset.col, 10);
+
+        // Call move logic only if dropped on a different square
+        if (targetRow !== startRow || targetCol !== startCol) {
+            makeUserMove(startRow, startCol, targetRow, targetCol);
+        }
+    }
+
+    // Refresh the board layout to restore original image styles and DOM state
+    renderBoard();
+}
+
 function renderBoard() {
     if (!boardElement) return;
     boardElement.innerHTML = "";
@@ -447,6 +518,10 @@ function renderBoard() {
                 img.alt = piece;
                 img.draggable = true;
                 img.addEventListener("dragstart", (e) => handleDragStart(e, actualRow, actualCol));
+                img.addEventListener("touchstart", (e) => handleTouchStart(e, actualRow, actualCol), { passive: false });
+                img.addEventListener("touchmove", (e) => handleTouchMove(e, img), { passive: false });
+                img.addEventListener("touchend", (e) => handleTouchEnd(e, actualRow, actualCol), { passive: false });
+                img.addEventListener("touchcancel", (e) => handleTouchEnd(e, actualRow, actualCol), { passive: false });
                 square.appendChild(img);
             }
 
