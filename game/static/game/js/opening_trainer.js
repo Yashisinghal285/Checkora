@@ -480,6 +480,12 @@ function handleTouchEnd(e, startRow, startCol) {
         // Clean up active touch tracking
         delete activeTouches[touchId];
         delete img.dataset.touchId;
+
+        // Do not commit moves from touchcancel
+        if (e.type === "touchcancel") {
+            return;
+        }
+
         // Safely extract the corresponding touch point from changedTouches
         const touch = e.changedTouches ? Array.from(e.changedTouches).find(t => t.identifier === touchId) : null;
         if (touch) {
