@@ -3442,7 +3442,8 @@
             black_name: bName,
             difficulty: difficulty,
             time_limit: timeLimit,
-            increment: increment
+            increment: increment,
+            opening: document.getElementById('welcomeOpeningSelect')?.value || '',
         };
 
         const fenValue = (fen && fen.trim()) ? fen.trim() : null;
@@ -3595,7 +3596,6 @@
                 // Advance the index and play the move
                 replayIndex++;
                 goToReplayMove(replayIndex);
-
                 // Schedule the NEXT move 1000ms (1 second) from now.
                 autoReplayInterval = setTimeout(playNextMove, 1000);
             };
